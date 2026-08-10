@@ -1,0 +1,61 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+<h2>Add Subject</h2>
+
+<form method="POST" action="/subjects/add">
+
+    <div class="mb-3">
+
+        <label>Subject Name</label>
+
+        <input
+            type="text"
+            name="subject_name"
+            class="form-control"
+            required>
+
+    </div>
+
+    <div class="mb-3">
+
+        <label>Subject Code</label>
+
+        <input
+            type="text"
+            name="subject_code"
+            class="form-control"
+            required>
+
+    </div>
+
+    <div class="mb-3">
+
+        <label>Description</label>
+
+        <textarea
+            name="description"
+            class="form-control"
+            rows="3"></textarea>
+
+    </div>
+
+    <button class="btn btn-success">
+
+        Save Subject
+
+    </button>
+
+    <a href="/subjects" class="btn btn-secondary">
+
+        Cancel
+
+    </a>
+
+</form>
+
+</div>
+
+<%- include("partials/footer") %>

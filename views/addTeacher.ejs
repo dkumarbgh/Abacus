@@ -1,0 +1,90 @@
+
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+<h2>Add Teacher</h2>
+
+<form action="/teachers/add" method="POST">
+
+<div class="mb-3">
+
+<label>Name</label>
+
+<input
+type="text"
+name="name"
+class="form-control"
+required>
+
+</div>
+
+<div class="mb-3">
+
+<label>Subject</label>
+
+<input
+type="text"
+name="subject"
+class="form-control"
+required>
+
+</div>
+
+<div class="mb-3">
+
+<label>Phone</label>
+
+<input
+type="text"
+name="phone"
+class="form-control">
+
+</div>
+
+<div class="mb-3">
+
+<label>Email</label>
+
+<input
+type="email"
+name="email"
+class="form-control">
+
+</div>
+
+<div class="mb-3">
+
+<label>Status</label>
+
+<select
+name="status"
+class="form-select">
+
+<option value="Active">Active</option>
+
+<option value="Inactive">Inactive</option>
+
+</select>
+
+</div>
+
+<button class="btn btn-success">
+
+Save Teacher
+
+</button>
+
+<a href="/teachers"
+class="btn btn-secondary">
+
+Cancel
+
+</a>
+
+</form>
+
+</div>
+
+<%- include("partials/footer") %>

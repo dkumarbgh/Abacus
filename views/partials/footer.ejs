@@ -1,0 +1,24 @@
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// Wires up any password field built with the toggle-password markup (see
+// partials/passwordField.ejs) to show/hide its value via the eye icon.
+// Global here (not per-page) so it works automatically on every password
+// field across the app without repeating this script everywhere.
+document.querySelectorAll('.toggle-password').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        const input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = showing ? 'bi bi-eye' : 'bi bi-eye-slash';
+    });
+});
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,66 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Attendance Report</h2>
+
+<form method="GET" action="/reports/attendance" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <select name="class_id" class="form-select" required>
+            <option value="">Select Class</option>
+            <% classes.forEach(c => { %>
+                <option value="<%= c.id %>" <%= class_id==c.id ? "selected" : "" %>><%= c.class_name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <input type="date" name="from" class="form-control" value="<%= from %>" placeholder="From">
+    </div>
+    <div class="col-md-3">
+        <input type="date" name="to" class="form-control" value="<%= to %>" placeholder="To">
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary w-100">Filter</button>
+    </div>
+</form>
+
+<% if (rows) { %>
+
+    <div class="mb-3 text-end">
+        <a class="btn btn-outline-success"
+           href="/reports/attendance/excel?class_id=<%= class_id %>&from=<%= from %>&to=<%= to %>">
+            ⬇ Export to Excel
+        </a>
+    </div>
+
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr><th>Student</th><th>Present Days</th><th>Total Marked</th><th>% Attendance</th></tr>
+        </thead>
+        <tbody>
+            <% if (rows.length === 0) { %>
+                <tr><td colspan="4" class="text-center">No students in this class</td></tr>
+            <% } %>
+            <% rows.forEach(r => { %>
+                <tr>
+                    <td><%= r.name %></td>
+                    <td><%= r.present_days || 0 %></td>
+                    <td><%= r.total_marked || 0 %></td>
+                    <td>
+                        <% if (r.pct !== "N/A" && r.pct < 75) { %>
+                            <span class="badge bg-danger"><%= r.pct %>%</span>
+                        <% } else if (r.pct === "N/A") { %>
+                            <span class="text-muted">N/A</span>
+                        <% } else { %>
+                            <span class="badge bg-success"><%= r.pct %>%</span>
+                        <% } %>
+                    </td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+
+<% } %>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

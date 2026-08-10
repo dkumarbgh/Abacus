@@ -1,0 +1,70 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row">
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h4>Create Exam</h4></div>
+            <div class="card-body">
+                <form action="/exams/add" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Exam Name</label>
+                        <input type="text" name="exam_name" class="form-control" placeholder="e.g. Term 1 Final" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Class</label>
+                        <select name="class_id" class="form-select" required>
+                            <% classes.forEach(c=>{ %>
+                                <option value="<%= c.id %>"><%= c.class_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Academic Year</label>
+                        <input type="text" name="academic_year" class="form-control" placeholder="2026-2027" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Exam Date</label>
+                        <input type="date" name="exam_date" class="form-control">
+                    </div>
+                    <button class="btn btn-success w-100">Create Exam</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white"><h4>Exams</h4></div>
+            <div class="card-body">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr><th>Exam</th><th>Class</th><th>Academic Year</th><th>Date</th><th width="260">Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <% if (exams.length === 0) { %>
+                            <tr><td colspan="5" class="text-center">No exams created yet</td></tr>
+                        <% } %>
+                        <% exams.forEach(e => { %>
+                            <tr>
+                                <td><%= e.exam_name %></td>
+                                <td><%= e.class_name %></td>
+                                <td><%= e.academic_year %></td>
+                                <td><%= e.exam_date || "-" %></td>
+                                <td>
+                                    <a href="/exams/marks/<%= e.id %>" class="btn btn-primary btn-sm">📝 Enter Marks</a>
+                                    <a href="/reports/exam-results/<%= e.id %>" class="btn btn-outline-primary btn-sm">📊 Results</a>
+                                    <a href="/exams/delete/<%= e.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this exam and all its marks?')">Delete</a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

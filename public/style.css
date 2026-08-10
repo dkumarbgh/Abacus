@@ -1,0 +1,20 @@
+body{
+    background:#f5f7fa;
+}
+
+.card{
+    border:none;
+    border-radius:12px;
+}
+
+.card-body{
+    text-align:center;
+}
+
+table{
+    background:white;
+}
+
+h2{
+    margin-bottom:20px;
+}

@@ -1,0 +1,86 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+<h2>📋 Attendance History</h2>
+
+<hr>
+
+<table class="table table-bordered table-striped">
+
+<thead class="table-dark">
+
+<tr>
+
+<th>Date</th>
+
+<th>Student</th>
+
+<th>Class</th>
+
+<th>Status</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<% if(attendance.length==0){ %>
+
+<tr>
+
+<td colspan="4" class="text-center">
+
+No attendance records found.
+
+</td>
+
+</tr>
+
+<% } %>
+
+<% attendance.forEach(function(a){ %>
+
+<tr>
+
+<td><%= a.attendance_date %></td>
+
+<td><%= a.name %></td>
+
+<td><%= a.class_name %></td>
+
+<td>
+
+<% if(a.status=="Present"){ %>
+
+<span class="badge bg-success">
+
+Present
+
+</span>
+
+<% }else{ %>
+
+<span class="badge bg-danger">
+
+Absent
+
+</span>
+
+<% } %>
+
+</td>
+
+</tr>
+
+<% }) %>
+
+</tbody>
+
+</table>
+
+</div>
+
+<%- include("partials/footer") %>

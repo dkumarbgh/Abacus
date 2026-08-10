@@ -1,0 +1,68 @@
+<%- include("../partials/header") %>
+<%- include("../partials/navbar") %>
+
+<h2>Users &amp; Logins</h2>
+
+<% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+<% } %>
+
+<div class="row">
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5>Add User</h5></div>
+            <div class="card-body">
+                <form action="/users/add" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <%- include("../partials/passwordField", { id: "addUserPassword", name: "password", label: "Password", required: true, minlength: 6 }) %>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select name="role" class="form-select">
+                            <option value="Teacher">Teacher</option>
+                            <option value="Accountant">Accountant</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-success w-100">Add User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white"><h5>Users at Your School</h5></div>
+            <div class="card-body">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr><th>Name</th><th>Email</th><th>Role</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <% users.forEach(u => { %>
+                            <tr>
+                                <td><%= u.name %></td>
+                                <td><%= u.email %></td>
+                                <td><span class="badge bg-secondary"><%= u.role %></span></td>
+                                <td>
+                                    <a href="/users/edit/<%= u.id %>" class="btn btn-primary btn-sm">Edit</a>
+                                    <a href="/users/delete/<%= u.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Remove this user?')">Remove</a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("../partials/footer") %>

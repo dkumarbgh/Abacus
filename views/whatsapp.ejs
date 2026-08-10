@@ -1,0 +1,121 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>WhatsApp Messages</h2>
+
+<p>
+    Connection status:
+    <% if (ready) { %>
+        <span class="badge bg-success">Connected</span>
+    <% } else { %>
+        <span class="badge bg-danger">Not Connected</span>
+    <% } %>
+    &nbsp;<a href="/whatsapp/debug" class="small">🔧 Full diagnostics</a>
+</p>
+
+<% if (!ready) { %>
+<div class="card shadow mb-4">
+    <div class="card-header bg-warning"><h5 class="mb-0">Connect WhatsApp to Start Messaging</h5></div>
+    <div class="card-body text-center">
+        <% if (qrImage) { %>
+            <p>Open WhatsApp on your phone &rarr; Settings &gt; Linked Devices &gt; Link a Device, then scan:</p>
+            <img src="<%= qrImage %>" alt="WhatsApp QR code" style="max-width:260px">
+            <p class="small text-muted mt-2">
+                QR codes expire after about a minute - refresh this page for a new one if it stops scanning.
+            </p>
+        <% } else if (diagnostics.chromeExists === false) { %>
+            <p class="text-danger mb-1"><strong>Can't start yet - Chrome isn't available on this server.</strong></p>
+            <p class="small text-muted">See <a href="/whatsapp/debug">Full diagnostics</a> for what to fix.</p>
+        <% } else { %>
+            <p class="text-muted">Starting up - refresh in a few seconds for the QR code.</p>
+        <% } %>
+        <button class="btn btn-outline-secondary btn-sm mt-2" onclick="location.reload()">🔄 Refresh</button>
+    </div>
+</div>
+<% } %>
+
+<div class="row">
+
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white"><h5>Message a Guardian</h5></div>
+            <div class="card-body">
+                <form action="/whatsapp/send" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Student</label>
+                        <select name="student_id" class="form-select" required>
+                            <option value="">Select student</option>
+                            <% students.forEach(s => { %>
+                                <option value="<%= s.id %>">
+                                    <%= s.name %> (<%= s.class_name || "-" %>) &mdash; <%= s.guardian_phone || "no phone on file" %>
+                                </option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea name="message" class="form-control" rows="4" required></textarea>
+                    </div>
+                    <button class="btn btn-success w-100">Send</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white"><h5>Broadcast to a Class</h5></div>
+            <div class="card-body">
+                <form action="/whatsapp/broadcast" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Class</label>
+                        <select name="class_id" class="form-select" required>
+                            <% classes.forEach(c => { %>
+                                <option value="<%= c.id %>"><%= c.class_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea name="message" class="form-control" rows="4" required></textarea>
+                    </div>
+                    <button class="btn btn-warning w-100">Broadcast to Class</button>
+                    <small class="text-muted d-block mt-2">Sends one-by-one with a short delay between messages.</small>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white"><h5>Recent Message Log</h5></div>
+            <div class="card-body" style="max-height: 600px; overflow-y:auto;">
+                <table class="table table-bordered table-sm">
+                    <thead class="table-dark">
+                        <tr><th>Time</th><th>Student</th><th>Type</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        <% if (logs.length === 0) { %>
+                            <tr><td colspan="4" class="text-center">No messages sent yet</td></tr>
+                        <% } %>
+                        <% logs.forEach(l => { %>
+                            <tr>
+                                <td><%= new Date(l.sent_at).toLocaleString() %></td>
+                                <td><%= l.student_name || l.phone %></td>
+                                <td><%= l.type %></td>
+                                <td>
+                                    <% if (l.status === 'SENT') { %>
+                                        <span class="badge bg-success">Sent</span>
+                                    <% } else { %>
+                                        <span class="badge bg-danger">Failed</span>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>
