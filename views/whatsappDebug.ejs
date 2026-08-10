@@ -1,0 +1,137 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>WhatsApp Diagnostics</h2>
+    <div>
+        <a href="/whatsapp" class="btn btn-outline-secondary btn-sm">&larr; Back to Messages</a>
+        <button class="btn btn-outline-primary btn-sm" onclick="location.reload()">🔄 Refresh</button>
+    </div>
+</div>
+
+<div class="row">
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0">Status</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Connected</th>
+                        <td>
+                            <% if (diagnostics.ready) { %>
+                                <span class="badge bg-success">Yes</span>
+                            <% } else { %>
+                                <span class="badge bg-danger">No</span>
+                            <% } %>
+                        </td>
+                    </tr>
+                    <tr><th>Last internal state</th><td><code><%= diagnostics.lastStateChange || "-" %></code></td></tr>
+                    <tr><th>Last QR issued</th><td><%= diagnostics.lastQrAt || "-" %></td></tr>
+                    <tr>
+                        <th>Last error</th>
+                        <td>
+                            <% if (diagnostics.lastError) { %>
+                                <span class="text-danger"><%= diagnostics.lastError.message %></span>
+                                <div class="small text-muted"><%= diagnostics.lastError.at %></div>
+                            <% } else { %>
+                                <span class="text-muted">None recorded</span>
+                            <% } %>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0">Environment</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>Node</th><td><%= diagnostics.node.version %> (<%= diagnostics.node.platform %>/<%= diagnostics.node.arch %>)</td></tr>
+                    <tr><th>Memory</th><td><%= diagnostics.memory.freeGB %> GB free / <%= diagnostics.memory.totalGB %> GB total</td></tr>
+                    <tr>
+                        <th>Session folder</th>
+                        <td>
+                            <code><%= diagnostics.sessionPath %></code><br>
+                            <% if (diagnostics.sessionDirWritable) { %>
+                                <span class="badge bg-success">Writable</span>
+                            <% } else { %>
+                                <span class="badge bg-danger">Not writable</span>
+                                <div class="small text-danger"><%= diagnostics.sessionDirError %></div>
+                            <% } %>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Chrome/Chromium</th>
+                        <td>
+                            <% if (diagnostics.chromePathError) { %>
+                                <span class="badge bg-danger">Could not resolve</span>
+                                <div class="small text-danger"><%= diagnostics.chromePathError %></div>
+                            <% } else { %>
+                                <code class="small"><%= diagnostics.chromePath %></code><br>
+                                <% if (diagnostics.chromeExists) { %>
+                                    <span class="badge bg-success">Found on disk</span>
+                                <% } else { %>
+                                    <span class="badge bg-danger">NOT found on disk</span>
+                                    <div class="small text-danger">
+                                        Puppeteer expects Chrome here but the file doesn't exist. This is the
+                                        most common cause of "Could not find Chrome" errors on hosts like Render -
+                                        Chromium either wasn't downloaded during build, or the disk was wiped
+                                        since. See the message below the QR code for how to fix this.
+                                    </div>
+                                <% } %>
+                            <% } %>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<% if (!diagnostics.ready) { %>
+<div class="card shadow mb-4">
+    <div class="card-header bg-warning"><h5 class="mb-0">Connect WhatsApp</h5></div>
+    <div class="card-body text-center">
+        <% if (qrImage) { %>
+            <p>Scan this from your phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device</p>
+            <img src="<%= qrImage %>" alt="WhatsApp QR code" style="max-width:280px">
+            <p class="small text-muted mt-2">
+                QR codes expire after about a minute - refresh this page to see the latest one if it stops scanning.
+            </p>
+        <% } else if (diagnostics.chromeExists === false) { %>
+            <p class="text-danger">
+                <strong>No QR code yet - Chrome isn't available, so the client can't even start.</strong>
+            </p>
+            <p class="small text-muted text-start">
+                On Render: add a build step to install Chromium (e.g. a <code>postinstall</code> script running
+                <code>npx puppeteer browsers install chrome</code>), or switch to
+                <code>puppeteer-core</code> with Render's provided Chrome path if using their native environment.
+                Also confirm the plan has enough memory (headless Chrome typically needs 512MB+ free) and that
+                <code>./whatsapp-session</code> is on a persistent disk if you want to avoid rescanning the QR
+                code on every deploy - Render's free/starter web services do NOT have a persistent disk by
+                default, only paid plans with an attached Disk do.
+            </p>
+        <% } else { %>
+            <p class="text-muted">No QR code captured yet - it may still be starting up, or a session is being restored from disk. Refresh in a few seconds.</p>
+        <% } %>
+    </div>
+</div>
+<% } %>
+
+<div class="card shadow">
+    <div class="card-header bg-dark text-white"><h5 class="mb-0">Recent Log Lines (newest first)</h5></div>
+    <div class="card-body">
+        <% if (logs.length === 0) { %>
+            <p class="text-muted">No log lines captured yet.</p>
+        <% } else { %>
+            <pre style="max-height:400px; overflow-y:auto; background:#111; color:#0f0; padding:1rem; font-size:0.8rem;"><% logs.forEach(l => { %><%= l.line %>
+<% }) %></pre>
+        <% } %>
+    </div>
+</div>
+
+<%- include("partials/footer") %>

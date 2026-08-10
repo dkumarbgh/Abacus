@@ -1,0 +1,270 @@
+<%- include("../partials/header") %>
+<%- include("../partials/navbar") %>
+
+<h2>Fee Collection</h2>
+
+<% if (students) { %>
+
+    <!-- Student picker -->
+    <div class="card shadow mb-3">
+        <div class="card-body">
+            <form method="GET" action="/fee-payments">
+                <div class="input-group">
+                    <input type="text" name="search" class="form-control" placeholder="Search student by name..." value="<%= search %>">
+                    <button class="btn btn-primary">🔍 Search</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr><th>Name</th><th>Admission No.</th><th>Class</th><th></th></tr>
+        </thead>
+        <tbody>
+            <% if (students.length === 0) { %>
+                <tr><td colspan="4" class="text-center">No students found</td></tr>
+            <% } %>
+            <% students.forEach(s => { %>
+                <tr>
+                    <td><%= s.name %></td>
+                    <td><%= s.admission_no || "-" %></td>
+                    <td><%= s.class_name || "-" %></td>
+                    <td><a href="/fee-payments/<%= s.id %>" class="btn btn-success btn-sm">Collect Fee</a></td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+
+<% } else { %>
+
+    <!-- Dues + payment form for a single student -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><%= student.name %> &mdash; Fee Dues</h5>
+            <% if (simpleFeeMode) { %>
+                <span class="badge bg-warning text-dark">Simple Fee Mode: Paid / Not Paid only</span>
+            <% } %>
+        </div>
+        <div class="card-body">
+
+            <table class="table table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <% if (simpleFeeMode) { %>
+                            <th>Fee</th><th>Academic Year</th><th>Status</th><th width="230">Action</th>
+                        <% } else { %>
+                            <th>Fee</th><th>Academic Year</th><th>Total</th><th>Discount</th><th>Net</th><th>Paid</th><th>Due</th><th width="230">Action</th>
+                        <% } %>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (dues.length === 0) { %>
+                        <tr><td colspan="<%= simpleFeeMode ? 4 : 8 %>" class="text-center">No fee structure defined for this class yet. Set one up under Fee Structure.</td></tr>
+                    <% } %>
+                    <% dues.forEach(d => { %>
+                        <tr class="<%= d.due > 0 ? 'table-warning' : 'table-success' %>">
+                            <td><%= d.fee_name %></td>
+                            <td><%= d.academic_year %></td>
+                            <% if (simpleFeeMode) { %>
+                                <td>
+                                    <% if (d.due > 0) { %>
+                                        <span class="badge bg-danger">Not Paid</span>
+                                    <% } else { %>
+                                        <span class="badge bg-success">Paid</span>
+                                    <% } %>
+                                </td>
+                            <% } else { %>
+                                <td>₹<%= d.amount %></td>
+                                <td>
+                                    <% if (d.discount) { %>
+                                        <span class="badge bg-info text-dark">
+                                            <% if (d.discount.discount_type === 'PERCENT') { %>
+                                                <%= d.discount.discount_value %>%
+                                            <% } else { %>
+                                                ₹<%= d.discount.discount_value %>
+                                            <% } %>
+                                        </span>
+                                        <% if (d.discount.reason) { %>
+                                            <div class="small text-muted"><%= d.discount.reason %></div>
+                                        <% } %>
+                                        <a href="/fee-payments/discount/remove/<%= d.discount.id %>"
+                                           class="small text-danger"
+                                           onclick="return confirm('Remove this discount?')">remove</a>
+                                    <% } else { %>
+                                        <span class="text-muted">&mdash;</span>
+                                    <% } %>
+                                </td>
+                                <td>₹<%= d.netAmount %></td>
+                                <td>₹<%= d.paid %></td>
+                                <td>₹<%= d.due %></td>
+                            <% } %>
+                            <td>
+                                <% if (d.due > 0) { %>
+                                    <% if (simpleFeeMode) { %>
+                                        <form action="/fee-payments/mark-paid" method="POST" class="d-inline"
+                                              onclick="return confirm('Mark \'<%= d.fee_name %>\' as fully PAID?')">
+                                            <input type="hidden" name="student_id" value="<%= student.id %>">
+                                            <input type="hidden" name="fee_structure_id" value="<%= d.id %>">
+                                            <button class="btn btn-sm btn-success" type="submit">✅ Mark Paid</button>
+                                        </form>
+                                    <% } else { %>
+                                        <button class="btn btn-sm btn-success" type="button"
+                                            onclick="payFee(<%= d.id %>, '<%= d.fee_name %>', <%= d.due %>)">
+                                            Collect
+                                        </button>
+                                    <% } %>
+                                <% } else { %>
+                                    <span class="badge bg-success">Paid</span>
+                                <% } %>
+                                <% if (!simpleFeeMode) { %>
+                                    <button class="btn btn-sm btn-outline-info" type="button"
+                                        onclick="discountFee(<%= d.id %>, '<%= d.fee_name %>')">
+                                        Discount/Waive
+                                    </button>
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+    <!-- Payment form (shown/populated via JS when "Collect" is clicked) - only relevant
+         when Simple Fee Mode is OFF, since ON uses the one-click Mark Paid button above -->
+    <% if (!simpleFeeMode) { %>
+    <div class="card shadow mb-4" id="payCard" style="display:none">
+        <div class="card-header bg-success text-white">
+            <h5>Record Payment &mdash; <span id="payFeeName"></span></h5>
+        </div>
+        <div class="card-body">
+            <form action="/fee-payments/pay" method="POST">
+                <input type="hidden" name="student_id" value="<%= student.id %>">
+                <input type="hidden" name="fee_structure_id" id="payFeeStructureId">
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Amount</label>
+                        <input type="number" step="0.01" name="amount_paid" id="payAmount" class="form-control" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Mode</label>
+                        <select name="mode" class="form-select">
+                            <option>Cash</option>
+                            <option>UPI</option>
+                            <option>Card</option>
+                            <option>Bank Transfer</option>
+                            <option>Cheque</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Remarks</label>
+                        <input type="text" name="remarks" class="form-control">
+                    </div>
+                </div>
+
+                <button class="btn btn-success">Save Payment & Notify Guardian on WhatsApp</button>
+            </form>
+        </div>
+    </div>
+    <% } %>
+
+    <!-- Discount / Waiver form (shown/populated via JS when "Discount/Waive" is clicked) -->
+    <% if (!simpleFeeMode) { %>
+    <div class="card shadow mb-4" id="discountCard" style="display:none">
+        <div class="card-header bg-info text-dark">
+            <h5>Discount / Waiver &mdash; <span id="discountFeeName"></span></h5>
+        </div>
+        <div class="card-body">
+            <form action="/fee-payments/discount" method="POST">
+                <input type="hidden" name="student_id" value="<%= student.id %>">
+                <input type="hidden" name="fee_structure_id" id="discountFeeStructureId">
+
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Type</label>
+                        <select name="discount_type" class="form-select">
+                            <option value="FLAT">Flat Amount (₹)</option>
+                            <option value="PERCENT">Percentage (%)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Value</label>
+                        <input type="number" step="0.01" name="discount_value" class="form-control">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Reason</label>
+                        <input type="text" name="reason" class="form-control" placeholder="e.g. Sibling discount, scholarship, staff ward">
+                    </div>
+                </div>
+
+                <button class="btn btn-info">Apply Discount</button>
+                <button class="btn btn-outline-danger" type="submit" name="waive_full" value="1"
+                        onclick="return confirm('Waive the FULL remaining amount for this fee item?')">
+                    Waive Full Amount
+                </button>
+            </form>
+        </div>
+    </div>
+    <% } %>
+
+    <script>
+        function payFee(feeStructureId, feeName, due) {
+            document.getElementById('discountCard').style.display = 'none';
+            document.getElementById('payCard').style.display = 'block';
+            document.getElementById('payFeeStructureId').value = feeStructureId;
+            document.getElementById('payFeeName').innerText = feeName;
+            document.getElementById('payAmount').value = due;
+            document.getElementById('payCard').scrollIntoView({ behavior: 'smooth' });
+        }
+        function discountFee(feeStructureId, feeName) {
+            document.getElementById('payCard').style.display = 'none';
+            document.getElementById('discountCard').style.display = 'block';
+            document.getElementById('discountFeeStructureId').value = feeStructureId;
+            document.getElementById('discountFeeName').innerText = feeName;
+            document.getElementById('discountCard').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+
+    <!-- Payment history -->
+    <div class="card shadow">
+        <div class="card-header bg-secondary text-white">
+            <h5>Payment History</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <% if (simpleFeeMode) { %>
+                            <th>Date</th><th>Receipt No.</th><th>Mode</th><th>Remarks</th><th></th>
+                        <% } else { %>
+                            <th>Date</th><th>Receipt No.</th><th>Amount</th><th>Mode</th><th>Remarks</th><th></th>
+                        <% } %>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (payments.length === 0) { %>
+                        <tr><td colspan="<%= simpleFeeMode ? 5 : 6 %>" class="text-center">No payments recorded yet</td></tr>
+                    <% } %>
+                    <% payments.forEach(p => { %>
+                        <tr>
+                            <td><%= p.payment_date %></td>
+                            <td><%= p.receipt_no %></td>
+                            <% if (!simpleFeeMode) { %><td>₹<%= p.amount_paid %></td><% } %>
+                            <td><%= p.mode %></td>
+                            <td><%= p.remarks || "-" %></td>
+                            <td><a href="/reports/receipt/<%= p.id %>" class="btn btn-outline-primary btn-sm" target="_blank">🧾 Receipt PDF</a></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <a href="/fee-payments" class="btn btn-link mt-3">&larr; Back to student search</a>
+
+<% } %>
+
+<%- include("../partials/footer") %>

@@ -1,0 +1,282 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+    <div class="row">
+
+        <!-- Add Timetable -->
+
+        <div class="col-md-4">
+
+            <div class="card shadow">
+
+                <div class="card-header bg-primary text-white">
+
+                    <h4>📅 Add Timetable</h4>
+
+                </div>
+
+                <div class="card-body">
+
+                    <form action="/timetable/add" method="POST">
+
+                        <!-- Class -->
+
+                        <div class="mb-3">
+
+                            <label>Class</label>
+
+                            <select class="form-select" name="class_id" required>
+
+                                <option value="">Select Class</option>
+
+                                <% classes.forEach(function(c){ %>
+
+                                    <option value="<%= c.id %>">
+
+                                        <%= c.class_name %>
+
+                                    </option>
+
+                                <% }) %>
+
+                            </select>
+
+                        </div>
+
+                        <!-- Teacher -->
+
+                        <div class="mb-3">
+
+                            <label>Teacher</label>
+
+                            <select class="form-select" name="teacher_id" required>
+
+                                <option value="">Select Teacher</option>
+
+                                <% teachers.forEach(function(t){ %>
+
+                                    <option value="<%= t.id %>">
+
+                                        <%= t.name %>
+
+                                    </option>
+
+                                <% }) %>
+
+                            </select>
+
+                        </div>
+
+                        <!-- Subject -->
+
+                        <div class="mb-3">
+
+                            <label>Subject</label>
+
+                            <select class="form-select" name="subject_id" required>
+
+                                <option value="">Select Subject</option>
+
+                                <% subjects.forEach(function(s){ %>
+
+                                    <option value="<%= s.id %>">
+
+                                        <%= s.subject_name %>
+
+                                    </option>
+
+                                <% }) %>
+
+                            </select>
+
+                        </div>
+
+                        <!-- Day -->
+
+                        <div class="mb-3">
+
+                            <label>Day</label>
+
+                            <select class="form-select" name="day">
+
+                                <option>Monday</option>
+                                <option>Tuesday</option>
+                                <option>Wednesday</option>
+                                <option>Thursday</option>
+                                <option>Friday</option>
+                                <option>Saturday</option>
+
+                            </select>
+
+                        </div>
+
+                        <!-- Period -->
+
+                        <div class="mb-3">
+
+                            <label>Period</label>
+
+                            <select class="form-select" name="period">
+
+                                <% for(let i=1;i<=8;i++){ %>
+
+                                    <option value="<%= i %>">
+
+                                        Period <%= i %>
+
+                                    </option>
+
+                                <% } %>
+
+                            </select>
+
+                        </div>
+
+                        <!-- Time -->
+
+                        <div class="mb-3">
+
+                            <label>Start Time</label>
+
+                            <input
+                                type="time"
+                                class="form-control"
+                                name="start_time">
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label>End Time</label>
+
+                            <input
+                                type="time"
+                                class="form-control"
+                                name="end_time">
+
+                        </div>
+
+                        <button class="btn btn-success w-100">
+
+                            Save Timetable
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Timetable List -->
+
+        <div class="col-md-8">
+
+            <div class="card shadow">
+
+                <div class="card-header bg-dark text-white">
+
+                    <h4>Timetable</h4>
+
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table table-bordered table-striped">
+
+                        <thead class="table-secondary">
+
+                            <tr>
+
+                                <th>Class</th>
+
+                                <th>Day</th>
+
+                                <th>Period</th>
+
+                                <th>Subject</th>
+
+                                <th>Teacher</th>
+
+                                <th>Time</th>
+
+                                <th>Action</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                        <% if(timetable.length===0){ %>
+
+                            <tr>
+
+                                <td colspan="7" class="text-center">
+
+                                    No Timetable Entries Found
+
+                                </td>
+
+                            </tr>
+
+                        <% } %>
+
+                        <% timetable.forEach(function(t){ %>
+
+                            <tr>
+
+                                <td><%= t.class_name %></td>
+
+                                <td><%= t.day %></td>
+
+                                <td><%= t.period %></td>
+
+                                <td><%= t.subject_name %></td>
+
+                                <td><%= t.teacher_name %></td>
+
+                                <td>
+
+                                    <%= t.start_time %> -
+
+                                    <%= t.end_time %>
+
+                                </td>
+
+                                <td>
+
+                                    <a
+                                        href="/timetable/delete/<%= t.id %>"
+                                        class="btn btn-danger btn-sm"
+                                        onclick="return confirm('Delete timetable?')">
+
+                                        Delete
+
+                                    </a>
+
+                                </td>
+
+                            </tr>
+
+                        <% }) %>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

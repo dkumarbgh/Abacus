@@ -1,0 +1,63 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4>Import Students</h4>
+            </div>
+            <div class="card-body">
+
+                <ol>
+                    <li>
+                        <a href="/students/import/template">⬇ Download the template</a>
+                        (an Excel file with the right column headers and one example row).
+                    </li>
+                    <li>Fill in one row per student, save it, then upload it below.</li>
+                    <li>
+                        <strong>Class</strong> must already exist (set up under Classes first) - a typo there
+                        will cause that row to be skipped rather than silently creating a new class.
+                        Course/Batch/Level/Branch, on the other hand, get created automatically if new.
+                    </li>
+                    <li>
+                        Total Fee / Discount / Installments aren't handled by import - add those
+                        individually from each student's Edit page afterwards, if needed.
+                    </li>
+                </ol>
+
+                <% if (result && result.error) { %>
+                    <div class="alert alert-danger"><%= result.error %></div>
+                <% } %>
+
+                <% if (result && typeof result.imported !== 'undefined') { %>
+                    <div class="alert <%= result.rowErrors.length ? 'alert-warning' : 'alert-success' %>">
+                        Imported <strong><%= result.imported %></strong> of <%= result.total %> row<%= result.total===1?'':'s' %>.
+                        <% if (result.rowErrors.length) { %>
+                            <%= result.rowErrors.length %> row<%= result.rowErrors.length===1?'':'s' %> skipped - see below.
+                        <% } %>
+                    </div>
+                    <% if (result.rowErrors.length) { %>
+                        <ul class="small text-danger">
+                            <% result.rowErrors.forEach(function(msg){ %>
+                                <li><%= msg %></li>
+                            <% }) %>
+                        </ul>
+                    <% } %>
+                    <a href="/students" class="btn btn-outline-primary btn-sm mb-3">View Students</a>
+                <% } %>
+
+                <form action="/students/import" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Filled-in file (.xlsx or .csv)</label>
+                        <input type="file" name="file" accept=".xlsx,.csv" class="form-control" required>
+                    </div>
+                    <button class="btn btn-success">Upload &amp; Import</button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("partials/footer") %>
