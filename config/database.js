@@ -347,9 +347,10 @@ async function migrate() {
     // before this column existed.
     await addColumnIfMissing("fee_structure", "student_id", "INTEGER");
 
-    // Admin-managed dropdown lists: Courses, Batches, Levels, Branches.
-    // One shared table (list_type distinguishes which list a row belongs
-    // to) rather than four near-identical tables.
+    // Sessions per week - only meaningful for list_type='batch', used to
+    // compute each batch's expected classes per month (sessions_per_week x
+    // ~4 weeks) for the attendance-regularity report. NULL for course/
+    // level/branch entries, where it's not applicable.
     await run(`
         CREATE TABLE IF NOT EXISTS lookup_items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -359,6 +360,35 @@ async function migrate() {
             FOREIGN KEY(school_id) REFERENCES schools(id)
         )
     `);
+    await addColumnIfMissing("lookup_items", "sessions_per_week", "INTEGER");
+
+    // Referral programme: an existing student refers a prospective new
+    // student; when that new student enrolls, school staff record who
+    // referred them right on the Student Add form. The reward/discount
+    // side of this (viewing all referrals, applying the reward as a fee
+    // discount) is Super-Admin-only - see routes/superAdmin.js.
+    await run(`
+        CREATE TABLE IF NOT EXISTS referrals(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            referring_student_id INTEGER NOT NULL,
+            referred_student_id INTEGER NOT NULL,
+            reward_type TEXT NOT NULL DEFAULT 'FLAT',
+            reward_value REAL NOT NULL DEFAULT 0,
+            reward_applied INTEGER NOT NULL DEFAULT 0,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id) REFERENCES schools(id),
+            FOREIGN KEY(referring_student_id) REFERENCES students(id),
+            FOREIGN KEY(referred_student_id) REFERENCES students(id)
+        )
+    `);
+
+    // Super-Admin-configurable default reward per school, so front-desk
+    // staff recording a referral don't have to type an amount each time -
+    // it's pre-filled from here (still overridable per referral).
+    await addColumnIfMissing("schools", "referral_reward_type", "TEXT NOT NULL DEFAULT 'FLAT'");
+    await addColumnIfMissing("schools", "referral_reward_value", "REAL NOT NULL DEFAULT 0");
 
     // Simple Fee Mode: per-school toggle. When ON, fee collection doesn't
     // accept a partial/custom amount - each fee item is just marked

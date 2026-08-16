@@ -29,8 +29,8 @@
         <div class="card shadow h-100">
             <div class="card-header bg-primary text-white"><h5>Attendance</h5></div>
             <div class="card-body">
-                <p>Present Days: <b><%= attSummary.present_days || 0 %></b> / <%= attSummary.total_marked || 0 %> marked</p>
-                <p>Attendance %:
+                <p>Present Days (all-time): <b><%= attSummary.present_days || 0 %></b> / <%= attSummary.total_marked || 0 %> marked</p>
+                <p>Overall Attendance %:
                     <% if (attendancePct !== "N/A" && attendancePct < 75) { %>
                         <span class="badge bg-danger"><%= attendancePct %>%</span>
                     <% } else if (attendancePct === "N/A") { %>
@@ -39,6 +39,41 @@
                         <span class="badge bg-success"><%= attendancePct %>%</span>
                     <% } %>
                 </p>
+
+                <% if (student.batch_name) { %>
+                    <p class="small text-muted mb-1">
+                        Batch: <%= student.batch_name %><%= student.sessions_per_week ? ' (' + student.sessions_per_week + ' sessions/week)' : '' %>
+                    </p>
+                <% } %>
+
+                <hr>
+                <h6 class="small text-muted">Monthly Regularity (last 6 months)</h6>
+                <% if (!student.sessions_per_week) { %>
+                    <p class="small text-muted">No batch schedule set - can't calculate expected classes per month.</p>
+                <% } else { %>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead><tr><th>Month</th><th>Attended</th><th>Expected</th><th>%</th><th>Status</th></tr></thead>
+                        <tbody>
+                            <% monthlyRegularity.forEach(function(m) { %>
+                                <tr>
+                                    <td><%= m.month %></td>
+                                    <td><%= m.attended %></td>
+                                    <td><%= m.expected == null ? '-' : m.expected %></td>
+                                    <td><%= m.pct == null ? '-' : m.pct + '%' %></td>
+                                    <td>
+                                        <% if (m.status === 'Regular') { %>
+                                            <span class="badge bg-success">Regular</span>
+                                        <% } else if (m.status === 'Irregular') { %>
+                                            <span class="badge bg-danger">Irregular</span>
+                                        <% } else { %>
+                                            <span class="text-muted">-</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } %>
             </div>
         </div>
     </div>

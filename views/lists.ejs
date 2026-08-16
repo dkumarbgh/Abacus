@@ -13,10 +13,18 @@
                 </div>
                 <div class="card-body">
 
-                    <form action="/lists/add" method="POST" class="d-flex gap-2 mb-3">
+                    <form action="/lists/add" method="POST" class="mb-3">
                         <input type="hidden" name="list_type" value="<%= type %>">
-                        <input type="text" name="name" class="form-control" placeholder="Add new <%= listTypes[type].toLowerCase() %> entry" required>
-                        <button class="btn btn-success">Add</button>
+                        <div class="d-flex gap-2">
+                            <input type="text" name="name" class="form-control" placeholder="Add new <%= listTypes[type].toLowerCase() %> entry" required>
+                            <% if (type === 'batch') { %>
+                                <input type="number" name="sessions_per_week" class="form-control" placeholder="Sessions/wk" style="max-width:130px">
+                            <% } %>
+                            <button class="btn btn-success">Add</button>
+                        </div>
+                        <% if (type === 'batch') { %>
+                            <small class="text-muted">Sessions/week is used to work out each student's expected classes per month.</small>
+                        <% } %>
                     </form>
 
                     <% if (grouped[type].length === 0) { %>
@@ -25,12 +33,23 @@
                         <ul class="list-group">
                             <% grouped[type].forEach(function(item) { %>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <%= item.name %>
-                                    <a href="/lists/delete/<%= item.id %>"
-                                       class="btn btn-outline-danger btn-sm"
-                                       onclick="return confirm('Delete &quot;<%= item.name %>&quot;? Students already using it will just show it as unset.')">
-                                        Delete
-                                    </a>
+                                    <span>
+                                        <%= item.name %>
+                                        <% if (type === 'batch' && item.sessions_per_week) { %>
+                                            <span class="badge bg-info text-dark"><%= item.sessions_per_week %>/week &middot; ~<%= item.sessions_per_week * 4 %>/month</span>
+                                        <% } %>
+                                    </span>
+                                    <span>
+                                        <% if (type === 'batch') { %>
+                                            <a href="/lists/batches/<%= item.id %>" class="btn btn-outline-primary btn-sm">Students</a>
+                                        <% } %>
+                                        <a href="/lists/edit/<%= item.id %>" class="btn btn-outline-secondary btn-sm">Edit</a>
+                                        <a href="/lists/delete/<%= item.id %>"
+                                           class="btn btn-outline-danger btn-sm"
+                                           onclick="return confirm('Delete &quot;<%= item.name %>&quot;? Students already using it will just show it as unset.')">
+                                            Delete
+                                        </a>
+                                    </span>
                                 </li>
                             <% }) %>
                         </ul>

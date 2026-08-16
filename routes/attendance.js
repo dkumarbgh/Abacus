@@ -5,11 +5,93 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { getFaceEncoding, findBestMatch } = require("../services/faceRecognition");
-const { requireLogin, requireApiAuth } = require("../middleware/auth");
+const { requireLogin, requireApiAuth, requireFeature } = require("../middleware/auth");
 
 const upload = multer({
     dest: path.join(__dirname, "../public/uploads/tmp")
 });
+
+/**
+ * Core face-match-and-mark-attendance logic, shared by the mobile app's
+ * JWT endpoint (/face-mark) and the browser-webcam endpoint
+ * (/face-mark-web) - same matching pipeline either way, just a different
+ * way of capturing the photo (phone camera vs laptop webcam).
+ *
+ * @returns {Promise<object>} always resolves (never rejects) with a plain
+ *   { ok, ...} object ready to send back as JSON - errors come back as
+ *   { ok: false, error: "..." } rather than throwing, so callers don't
+ *   need a try/catch around this.
+ */
+async function markAttendanceByFace({ imagePath, classId, schoolId, attendanceDate }) {
+
+    const date = attendanceDate || new Date().toISOString().slice(0, 10);
+
+    if (!classId) {
+        return { ok: false, error: "class_id_required" };
+    }
+
+    const result = await getFaceEncoding(imagePath);
+
+    if (result.error) {
+        return { ok: false, error: result.error };
+    }
+
+    // Only match against students enrolled in the selected class AND this
+    // school (keeps matching fast, more accurate, and tenant-isolated)
+    const candidates = await new Promise((resolve, reject) => {
+        db.all(
+            `SELECT face_encodings.student_id, face_encodings.encoding
+             FROM face_encodings
+             JOIN students ON students.id = face_encodings.student_id
+             WHERE students.class_id = ? AND students.school_id = ?`,
+            [classId, schoolId],
+            (err, rows) => err ? reject(err) : resolve(rows)
+        );
+    });
+
+    if (candidates.length === 0) {
+        return { ok: false, error: "no_enrolled_faces_in_class" };
+    }
+
+    const match = findBestMatch(result.encoding, candidates);
+
+    if (!match) {
+        return { ok: false, error: "no_match" };
+    }
+
+    const student = await new Promise((resolve, reject) => {
+        db.get("SELECT * FROM students WHERE id=? AND school_id=?", [match.studentId, schoolId], (err, row) => err ? reject(err) : resolve(row));
+    });
+
+    if (!student) {
+        return { ok: false, error: "student_lookup_failed" };
+    }
+
+    // Upsert attendance for this student+date (avoid duplicate rows if scanned twice)
+    const existing = await new Promise((resolve, reject) => {
+        db.get("SELECT id FROM attendance WHERE student_id=? AND attendance_date=?", [student.id, date], (err, row) => err ? reject(err) : resolve(row));
+    });
+
+    await new Promise((resolve, reject) => {
+        if (existing) {
+            db.run("UPDATE attendance SET status=? WHERE id=?", ["Present", existing.id], (err) => err ? reject(err) : resolve());
+        } else {
+            db.run(
+                `INSERT INTO attendance (student_id, attendance_date, status, school_id) VALUES (?,?,?,?)`,
+                [student.id, date, "Present", schoolId],
+                (err) => err ? reject(err) : resolve()
+            );
+        }
+    });
+
+    return {
+        ok: true,
+        student: { id: student.id, name: student.name, admission_no: student.admission_no },
+        confidence: Number(match.confidence.toFixed(2)),
+        date
+    };
+
+}
 
 /* ===========================================
    FACE-RECOGNITION ATTENDANCE (used by the mobile app)
@@ -18,95 +100,22 @@ const upload = multer({
    POST multipart: image, class_id, attendance_date (optional, default today)
    Returns JSON so the Flutter app can show a result.
 =========================================== */
-router.post("/face-mark", requireApiAuth, upload.single("image"), async (req, res) => {
+router.post("/face-mark", requireApiAuth, requireFeature("faceRecognition", { asJson: true }), upload.single("image"), async (req, res) => {
 
     if (!req.file) {
         return res.status(400).json({ ok: false, error: "no_image_uploaded" });
     }
 
-    const class_id = req.body.class_id;
-    const attendance_date = req.body.attendance_date || new Date().toISOString().slice(0, 10);
-    const schoolId = req.schoolId;
+    const result = await markAttendanceByFace({
+        imagePath: req.file.path,
+        classId: req.body.class_id,
+        schoolId: req.schoolId,
+        attendanceDate: req.body.attendance_date
+    });
 
-    const cleanup = () => fs.unlink(req.file.path, () => {});
+    fs.unlink(req.file.path, () => {});
 
-    if (!class_id) {
-        cleanup();
-        return res.status(400).json({ ok: false, error: "class_id_required" });
-    }
-
-    const result = await getFaceEncoding(req.file.path);
-
-    if (result.error) {
-        cleanup();
-        return res.json({ ok: false, error: result.error });
-    }
-
-    // Only match against students enrolled in the selected class AND this
-    // school (keeps matching fast, more accurate, and tenant-isolated)
-    db.all(
-        `SELECT face_encodings.student_id, face_encodings.encoding
-         FROM face_encodings
-         JOIN students ON students.id = face_encodings.student_id
-         WHERE students.class_id = ? AND students.school_id = ?`,
-        [class_id, schoolId],
-        (err, candidates) => {
-
-            cleanup();
-
-            if (err) return res.status(500).json({ ok: false, error: err.message });
-
-            if (candidates.length === 0) {
-                return res.json({ ok: false, error: "no_enrolled_faces_in_class" });
-            }
-
-            const match = findBestMatch(result.encoding, candidates);
-
-            if (!match) {
-                return res.json({ ok: false, error: "no_match" });
-            }
-
-            db.get("SELECT * FROM students WHERE id=? AND school_id=?", [match.studentId, schoolId], (err2, student) => {
-
-                if (err2 || !student) {
-                    return res.status(500).json({ ok: false, error: "student_lookup_failed" });
-                }
-
-                // Upsert attendance for this student+date (avoid duplicate rows if scanned twice)
-                db.get(
-                    "SELECT id FROM attendance WHERE student_id=? AND attendance_date=?",
-                    [student.id, attendance_date],
-                    (err3, existing) => {
-
-                        const respond = () => res.json({
-                            ok: true,
-                            student: { id: student.id, name: student.name, admission_no: student.admission_no },
-                            confidence: Number(match.confidence.toFixed(2)),
-                            date: attendance_date
-                        });
-
-                        if (existing) {
-                            db.run(
-                                "UPDATE attendance SET status=? WHERE id=?",
-                                ["Present", existing.id],
-                                () => respond()
-                            );
-                        } else {
-                            db.run(
-                                `INSERT INTO attendance (student_id, attendance_date, status, school_id)
-                                 VALUES (?,?,?,?)`,
-                                [student.id, attendance_date, "Present", schoolId],
-                                () => respond()
-                            );
-                        }
-
-                    }
-                );
-
-            });
-
-        }
-    );
+    res.status(result.ok ? 200 : (result.error === "class_id_required" ? 400 : 200)).json(result);
 
 });
 
@@ -137,6 +146,47 @@ router.get("/", (req, res) => {
             });
 
         });
+
+});
+
+
+/* ===========================================
+   FACE-RECOGNITION ATTENDANCE VIA LAPTOP WEBCAM
+   Same matching pipeline as the mobile app's /face-mark above, just
+   session-authenticated instead of JWT, and the photo comes from the
+   browser's webcam (getUserMedia) instead of a phone camera - handy for a
+   reception-desk laptop instead of needing the Flutter app set up.
+=========================================== */
+router.get("/face-capture", requireFeature("faceRecognition"), (req, res) => {
+
+    db.all(
+        "SELECT * FROM classes WHERE school_id=? AND is_active=1 ORDER BY class_name",
+        [req.schoolId],
+        (err, classes) => {
+
+            if (err) return res.send(err.message);
+
+            res.render("faceCapture", { classes });
+
+        });
+
+});
+
+router.post("/face-mark-web", requireFeature("faceRecognition", { asJson: true }), upload.single("image"), async (req, res) => {
+
+    if (!req.file) {
+        return res.status(400).json({ ok: false, error: "no_image_uploaded" });
+    }
+
+    const result = await markAttendanceByFace({
+        imagePath: req.file.path,
+        classId: req.body.class_id,
+        schoolId: req.schoolId
+    });
+
+    fs.unlink(req.file.path, () => {});
+
+    res.json(result);
 
 });
 

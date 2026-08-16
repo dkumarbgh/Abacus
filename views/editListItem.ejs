@@ -1,0 +1,31 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-warning">
+                <h4>Edit <%= listTypes[item.list_type] %> Entry</h4>
+            </div>
+            <div class="card-body">
+                <form action="/lists/edit/<%= item.id %>" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" value="<%= item.name %>" required>
+                    </div>
+                    <% if (item.list_type === 'batch') { %>
+                        <div class="mb-3">
+                            <label class="form-label">Sessions per Week</label>
+                            <input type="number" name="sessions_per_week" class="form-control" value="<%= item.sessions_per_week || '' %>">
+                            <small class="text-muted">Used to work out each student's expected classes per month (roughly &times;4).</small>
+                        </div>
+                    <% } %>
+                    <button class="btn btn-primary">Save Changes</button>
+                    <a href="/lists" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("partials/footer") %>

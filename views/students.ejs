@@ -58,7 +58,9 @@
             </td>
             <td>
                 <a href="/students/edit/<%= student.id %>" class="btn btn-warning btn-sm">✏ Edit</a>
-                <a href="/students/enroll-face/<%= student.id %>" class="btn btn-info btn-sm">📷 Face</a>
+                <% if (features.faceRecognition) { %>
+                    <a href="/students/enroll-face/<%= student.id %>" class="btn btn-info btn-sm">📷 Face</a>
+                <% } %>
                 <a href="/reports/student/<%= student.id %>" class="btn btn-outline-primary btn-sm">📄 Report</a>
                 <a href="/students/delete/<%= student.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this student?')">Delete</a>
             </td>

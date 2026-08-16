@@ -1,3 +1,7 @@
+// Loads .env (if present) and feature flags FIRST, before any other module
+// (e.g. config/database.js reading DB_PATH) reads process.env.
+const features = require("./config/features");
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -6,6 +10,17 @@ const session = require("express-session");
 
 const db = require("./config/database");
 const { requireLogin } = require("./middleware/auth");
+const fs = require("fs");
+
+// Multer (file uploads) does NOT create its destination folder if it's
+// missing - the first upload would just crash with ENOENT. Rather than
+// relying on placeholder files surviving git/deployment, create every
+// upload folder here on every startup - cheap, idempotent (no-op if it
+// already exists), and works the same whether this is a fresh clone, a
+// fresh Render deploy, or a folder someone accidentally deleted.
+["students", "tmp", "sheets", "faces"].forEach(dir => {
+    fs.mkdirSync(path.join(__dirname, "public/uploads", dir), { recursive: true });
+});
 
 const authRoutes = require("./routes/auth");
 const studentRoutes = require("./routes/students");
@@ -66,6 +81,7 @@ app.use((req, res, next) => {
     // there's always a visible way back to /super-admin - never silently
     // "become" that school's Admin with no way out.
     res.locals.impersonating = !!(req.session && req.session.superAdminOriginal);
+    res.locals.features = features;
     next();
 });
 

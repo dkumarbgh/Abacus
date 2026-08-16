@@ -7,12 +7,94 @@ const { sendBulk } = require("../services/whatsappClient");
 const { requireLogin } = require("../middleware/auth");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
 const { getSimpleFeeMode } = require("../services/schoolSettings");
+const { getElapsedInfo, computeExpected, classifyRegularity } = require("../services/attendanceCalc");
 
 router.use(requireLogin);
 
 /* ===========================================
-   REPORTS HUB
+   ATTENDANCE REGULARITY REPORT
+   Student-wise, month-wise: how many classes each student attended so far
+   this month vs. how many were expected, based on THEIR OWN batch's
+   sessions/week (not a single shared value - two students in the same
+   class can be in different batches with different schedules). Populates
+   automatically for the whole school by month; Class, Batch, and Student
+   Name are optional narrowing filters, not requirements. Reuses the same
+   `attendance` table every other attendance feature already writes to
+   (manual, face-recognition, webcam) - no separate batch-attendance
+   system needed, this is just a different lens on the same data.
 =========================================== */
+router.get("/attendance-regularity", (req, res) => {
+
+    const schoolId = req.schoolId;
+    const month = req.query.month || new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    const classId = req.query.class_id || "";
+    const batchId = req.query.batch_id || "";
+    const studentName = (req.query.student_name || "").trim();
+
+    // Expected classes so far: sessions/week x (days ELAPSED / 7), not the
+    // whole month - a student checked mid-month shouldn't be marked
+    // Irregular just because the month isn't over yet.
+    const { daysElapsed, isCurrentMonth } = getElapsedInfo(month);
+    const [year, mon] = month.split("-");
+    const from = `${year}-${mon}-01`;
+    const to = `${year}-${mon}-31`; // BETWEEN with a plain date string comparison is safe even for shorter months
+
+    Promise.all([
+        new Promise((resolve, reject) => {
+            db.all("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
+        }),
+        new Promise((resolve, reject) => {
+            db.all("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
+        })
+    ]).then(([classes, batches]) => {
+
+        let sql = `
+            SELECT students.id, students.name, students.admission_no,
+                   classes.class_name,
+                   batch.name AS batch_name, batch.sessions_per_week,
+                   COUNT(CASE WHEN attendance.status='Present' THEN 1 END) AS attended
+            FROM students
+            LEFT JOIN classes ON students.class_id = classes.id
+            LEFT JOIN lookup_items batch ON students.batch_id = batch.id
+            LEFT JOIN attendance
+                   ON attendance.student_id = students.id
+                  AND attendance.attendance_date BETWEEN ? AND ?
+            WHERE students.school_id = ?
+        `;
+        const params = [from, to, schoolId];
+
+        if (classId) { sql += " AND students.class_id = ?"; params.push(classId); }
+        if (batchId) { sql += " AND students.batch_id = ?"; params.push(batchId); }
+        if (studentName) { sql += " AND students.name LIKE ?"; params.push(`%${studentName}%`); }
+
+        sql += " GROUP BY students.id ORDER BY students.name";
+
+        db.all(sql, params, (err, rows) => {
+
+            if (err) return res.send(err.message);
+
+            const withStatus = rows.map(r => {
+                // Each student's OWN batch schedule, not a shared one.
+                const expected = computeExpected(r.sessions_per_week, daysElapsed);
+                const { pct, status } = classifyRegularity(r.attended, expected);
+                return { ...r, expected, pct, status };
+            });
+
+            res.render("attendanceRegularityReport", {
+                classes, batches, month, rows: withStatus, isCurrentMonth, daysElapsed,
+                selectedClass: classId, selectedBatch: batchId, studentName
+            });
+
+        });
+
+    }).catch(err => res.send(err.message));
+
+});
+
+
+
+
+
 router.get("/", (req, res) => {
 
     const schoolId = req.schoolId;
@@ -430,8 +512,10 @@ router.get("/student/:id", (req, res) => {
     const schoolId = req.schoolId;
 
     db.get(
-        `SELECT students.*, classes.class_name FROM students
+        `SELECT students.*, classes.class_name, batch.name AS batch_name, batch.sessions_per_week
+         FROM students
          LEFT JOIN classes ON students.class_id = classes.id
+         LEFT JOIN lookup_items batch ON students.batch_id = batch.id
          WHERE students.id=? AND students.school_id=?`,
         [studentId, schoolId],
         (err, student) => {
@@ -448,6 +532,49 @@ router.get("/student/:id", (req, res) => {
                 (err, attSummary) => {
 
                     if (err) return res.send(err.message);
+
+                    // Regularity trend: current month plus the previous 5,
+                    // each using the student's own batch schedule - gives a
+                    // fuller "progress over time" picture than a single
+                    // month, useful when sharing this with a parent.
+                    const now = new Date();
+                    const months = [];
+                    for (let i = 5; i >= 0; i--) {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+                    }
+
+                    const monthlyRegularity = [];
+                    let monthsDone = 0;
+
+                    if (months.length === 0) {
+                        proceedAfterRegularity();
+                    } else {
+                        months.forEach(m => {
+                            const [y, mo] = m.split("-");
+                            const from = `${y}-${mo}-01`;
+                            const to = `${y}-${mo}-31`;
+                            db.get(
+                                `SELECT COUNT(*) AS attended FROM attendance
+                                 WHERE student_id=? AND school_id=? AND status='Present'
+                                   AND attendance_date BETWEEN ? AND ?`,
+                                [studentId, schoolId, from, to],
+                                (err3, row) => {
+                                    const { daysElapsed } = getElapsedInfo(m);
+                                    const expected = computeExpected(student.sessions_per_week, daysElapsed);
+                                    const { pct, status } = classifyRegularity(row ? row.attended : 0, expected);
+                                    monthlyRegularity.push({ month: m, attended: row ? row.attended : 0, expected, pct, status });
+                                    monthsDone++;
+                                    if (monthsDone === months.length) {
+                                        monthlyRegularity.sort((a, b) => a.month.localeCompare(b.month));
+                                        proceedAfterRegularity();
+                                    }
+                                }
+                            );
+                        });
+                    }
+
+                    function proceedAfterRegularity() {
 
                     computeDuesByClass(schoolId, student.class_id, (err, duesResults) => {
 
@@ -479,7 +606,8 @@ router.get("/student/:id", (req, res) => {
                                         attendancePct,
                                         feeInfo,
                                         examResults,
-                                        simpleFeeMode
+                                        simpleFeeMode,
+                                        monthlyRegularity
                                     });
                                 }).catch(err2 => res.send(err2.message));
 
@@ -487,6 +615,8 @@ router.get("/student/:id", (req, res) => {
                         );
 
                     });
+
+                    }
 
                 }
             );

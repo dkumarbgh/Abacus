@@ -7,6 +7,10 @@
         📅 Attendance Management
     </h2>
 
+    <% if (features.faceRecognition) { %>
+        <a href="/attendance/face-capture" class="btn btn-outline-primary mb-4">📷 Mark Attendance via Laptop Camera</a>
+    <% } %>
+
     <!-- Select Class & Date -->
     <form action="/attendance/load" method="GET">
 

@@ -1,0 +1,71 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/lists" class="btn btn-outline-secondary btn-sm mb-3">&larr; Courses/Batches/Levels/Branches</a>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><%= batch.name %></h2>
+    <% if (batch.sessions_per_week) { %>
+        <span class="badge bg-info text-dark fs-6"><%= batch.sessions_per_week %> sessions/week &middot; ~<%= batch.sessions_per_week * 4 %>/month expected</span>
+    <% } else { %>
+        <a href="/lists/edit/<%= batch.id %>" class="btn btn-outline-warning btn-sm">Set sessions/week to enable the attendance report</a>
+    <% } %>
+</div>
+
+<div class="row">
+
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0">Add a Student to This Batch</h5></div>
+            <div class="card-body">
+                <% if (available.length === 0) { %>
+                    <p class="text-muted small">Every student is already in this batch.</p>
+                <% } else { %>
+                    <form action="/lists/batches/<%= batch.id %>/add-student" method="POST" class="d-flex gap-2">
+                        <select name="student_id" class="form-select" required>
+                            <option value="">Select a student</option>
+                            <% available.forEach(function(s) { %>
+                                <option value="<%= s.id %>"><%= s.name %><%= s.admission_no ? ' (' + s.admission_no + ')' : '' %></option>
+                            <% }) %>
+                        </select>
+                        <button class="btn btn-success">Add</button>
+                    </form>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white"><h5 class="mb-0">Students in This Batch (<%= roster.length %>)</h5></div>
+            <div class="card-body">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr><th>Name</th><th>Admission No.</th><th>Class</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <% if (roster.length === 0) { %>
+                            <tr><td colspan="4" class="text-center">No students assigned to this batch yet.</td></tr>
+                        <% } %>
+                        <% roster.forEach(function(s) { %>
+                            <tr>
+                                <td><a href="/reports/student/<%= s.id %>"><%= s.name %></a></td>
+                                <td><%= s.admission_no || '-' %></td>
+                                <td><%= s.class_name || '-' %></td>
+                                <td>
+                                    <form action="/lists/batches/<%= batch.id %>/remove-student/<%= s.id %>" method="POST"
+                                          onclick="return confirm('Remove <%= s.name %> from this batch?')">
+                                        <button class="btn btn-outline-danger btn-sm" type="submit">Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

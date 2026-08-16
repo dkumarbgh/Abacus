@@ -2,9 +2,10 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { sendMessage, sendBulk, isReady, getDiagnostics, getRecentLogs, getLastQrImage } = require("../services/whatsappClient");
-const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireLogin, requireRole, requireFeature } = require("../middleware/auth");
 
 router.use(requireLogin);
+router.use(requireFeature("whatsapp"));
 
 /* ===========================================
    MESSAGE CENTER - pick a student / class, compose, send

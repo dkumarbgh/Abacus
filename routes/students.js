@@ -4,7 +4,7 @@ const db = require("../config/database");
 const multer = require("multer");
 const path = require("path");
 const { getFaceEncoding } = require("../services/faceRecognition");
-const { requireLogin } = require("../middleware/auth");
+const { requireLogin, requireFeature } = require("../middleware/auth");
 const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, assignNextAdmissionNo } = require("../services/schoolSettings");
 const { saveEnrollmentFee, parseInstallmentsFromBody } = require("../services/enrollmentFee");
 const ExcelJS = require("exceljs");
@@ -43,9 +43,19 @@ function validateStudentFields(fieldSettings, body) {
 }
 
 /**
- * Fetches the four admin-managed dropdown lists (Courses/Batches/Levels/
- * Branches) for a school, grouped by type, for use on the Add/Edit forms.
+ * Existing students in this school, for the "Referred By" dropdown on the
+ * Add Student form - lets front-desk staff record that a new enrollment
+ * came from an existing student's referral, right at the point of intake.
  */
+function getReferralCandidates(schoolId) {
+    return new Promise((resolve, reject) => {
+        db.all(
+            "SELECT id, name, admission_no FROM students WHERE school_id=? ORDER BY name",
+            [schoolId],
+            (err, rows) => err ? reject(err) : resolve(rows)
+        );
+    });
+}
 function getLookupLists(schoolId) {
     return new Promise((resolve, reject) => {
         db.all(
@@ -382,14 +392,16 @@ router.get("/add", (req, res) => {
             Promise.all([
                 getFieldSettings(req.schoolId, "student"),
                 getLookupLists(req.schoolId),
-                getAdmissionNoSettings(req.schoolId)
+                getAdmissionNoSettings(req.schoolId),
+                getReferralCandidates(req.schoolId)
             ])
-                .then(([fieldSettings, lists, admissionNo]) => {
+                .then(([fieldSettings, lists, admissionNo, referralCandidates]) => {
                     res.render("addStudent", {
                         classes,
                         fieldSettings,
                         lists,
                         admissionNo,
+                        referralCandidates,
                         errors: [],
                         old: {}
                     });
@@ -431,13 +443,15 @@ router.post("/add", upload.single("photo"), (req, res) => {
                 new Promise((resolve, reject) => {
                     db.all("SELECT * FROM classes WHERE school_id=? AND is_active=1 ORDER BY class_name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
                 }),
-                getLookupLists(schoolId)
-            ]).then(([classes, lists]) => {
+                getLookupLists(schoolId),
+                getReferralCandidates(schoolId)
+            ]).then(([classes, lists, referralCandidates]) => {
                 res.render("addStudent", {
                     classes,
                     fieldSettings,
                     lists,
                     admissionNo,
+                    referralCandidates,
                     errors: missing,
                     old: req.body
                 });
@@ -468,6 +482,26 @@ router.post("/add", upload.single("photo"), (req, res) => {
 
                 const studentId = this.lastID;
 
+                // If this new student was referred by an existing one,
+                // record it (using this school's default reward, still
+                // adjustable later) - the reward itself is only ever
+                // applied by a Super Admin from the Referral Programme
+                // dashboard, not automatically here.
+                const referredBy = req.body.referred_by_student_id;
+                if (referredBy && String(referredBy).trim() && require("../config/features").referralProgramme) {
+                    db.get("SELECT referral_reward_type, referral_reward_value FROM schools WHERE id=?", [schoolId], (refErr, school) => {
+                        if (refErr) return console.error("Referral lookup failed:", refErr.message);
+                        db.run(
+                            `INSERT INTO referrals (school_id, referring_student_id, referred_student_id, reward_type, reward_value)
+                             VALUES (?,?,?,?,?)`,
+                            [schoolId, referredBy, studentId,
+                             (school && school.referral_reward_type) || "FLAT",
+                             (school && school.referral_reward_value) || 0],
+                            (insErr) => { if (insErr) console.error("Referral record failed:", insErr.message); }
+                        );
+                    });
+                }
+
                 // Total Fee / Discount / Installments -> real fee records.
                 saveEnrollmentFee({
                     studentId,
@@ -480,7 +514,7 @@ router.post("/add", upload.single("photo"), (req, res) => {
                 }).catch(err2 => console.error("Enrollment fee save failed for student", studentId, ":", err2.message));
 
                 // If a photo was uploaded, try to enroll it for face-recognition attendance right away.
-                if (req.file) {
+                if (req.file && require("../config/features").faceRecognition) {
                     getFaceEncoding(req.file.path).then((result) => {
                         if (result.encoding) {
                             db.run(
@@ -620,7 +654,7 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
                     installments: parseInstallmentsFromBody(req.body)
                 }).catch(err2 => console.error("Enrollment fee save failed for student", req.params.id, ":", err2.message));
 
-                if (req.file) {
+                if (req.file && require("../config/features").faceRecognition) {
                     getFaceEncoding(req.file.path).then((result) => {
                         if (result.encoding) {
                             db.run(
@@ -649,7 +683,7 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
    FACE ENROLLMENT (dedicated page, e.g. to re-enroll
    a clearer photo without editing all other details)
 ===================================================== */
-router.get("/enroll-face/:id", (req, res) => {
+router.get("/enroll-face/:id", requireFeature("faceRecognition"), (req, res) => {
 
     db.get("SELECT * FROM students WHERE id=? AND school_id=?", [req.params.id, req.schoolId], (err, student) => {
 
@@ -662,7 +696,7 @@ router.get("/enroll-face/:id", (req, res) => {
 
 });
 
-router.post("/enroll-face/:id", upload.single("photo"), async (req, res) => {
+router.post("/enroll-face/:id", requireFeature("faceRecognition"), upload.single("photo"), async (req, res) => {
 
     if (!req.file) {
         return res.send("<h4>Please choose a clear, front-facing photo.</h4><a href='/students'>Back</a>");

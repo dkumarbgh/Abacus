@@ -77,11 +77,12 @@ router.get("/schools/:id/edit", (req, res) => {
 
 router.post("/schools/:id/edit", (req, res) => {
 
-    const { name, address, phone, email, simple_fee_mode } = req.body;
+    const { name, address, phone, email, simple_fee_mode, referral_reward_type, referral_reward_value } = req.body;
 
     db.run(
-        "UPDATE schools SET name=?, address=?, phone=?, email=?, simple_fee_mode=? WHERE id=?",
-        [name, address, phone, email, simple_fee_mode === "on" ? 1 : 0, req.params.id],
+        "UPDATE schools SET name=?, address=?, phone=?, email=?, simple_fee_mode=?, referral_reward_type=?, referral_reward_value=? WHERE id=?",
+        [name, address, phone, email, simple_fee_mode === "on" ? 1 : 0,
+         referral_reward_type || "FLAT", parseFloat(referral_reward_value) || 0, req.params.id],
         (err) => {
 
             if (err) return res.send(err.message);
@@ -269,6 +270,127 @@ router.get("/schools/:id/login-as", (req, res) => {
         req.session.schoolName = school.name;
 
         res.redirect("/");
+
+    });
+
+});
+
+/* ===========================================
+   REFERRAL PROGRAMME (Super Admin only)
+   Every referral across every school, with the ability to apply the
+   reward as a real discount against the referring student's largest
+   outstanding fee item (same discount mechanism used everywhere else in
+   the app) - not automatic, since a human should confirm before it
+   actually changes what someone owes.
+=========================================== */
+router.get("/referrals", (req, res) => {
+
+    db.all(`
+        SELECT
+            referrals.*,
+            schools.name AS school_name,
+            ref_by.name AS referring_student_name,
+            ref_to.name AS referred_student_name
+        FROM referrals
+        JOIN schools ON referrals.school_id = schools.id
+        JOIN students ref_by ON referrals.referring_student_id = ref_by.id
+        JOIN students ref_to ON referrals.referred_student_id = ref_to.id
+        ORDER BY referrals.created_at DESC
+    `, (err, referrals) => {
+
+        if (err) return res.send(err.message);
+
+        res.render("superAdmin/referrals", { referrals, error: null });
+
+    });
+
+});
+
+router.post("/referrals/:id/apply-reward", async (req, res) => {
+
+    db.get("SELECT * FROM referrals WHERE id=?", [req.params.id], (err, referral) => {
+
+        if (err) return res.send(err.message);
+        if (!referral) return res.send("Referral not found");
+
+        // Find the referring student's fee item with the largest remaining
+        // due amount (class-wide or personalized, same rule used
+        // everywhere else) - that's what the reward discount applies to.
+        db.all(
+            `SELECT fs.id, fs.amount
+             FROM fee_structure fs, students s
+             WHERE s.id = ? AND fs.school_id = ?
+               AND ((fs.student_id IS NULL AND fs.class_id = s.class_id) OR fs.student_id = s.id)`,
+            [referral.referring_student_id, referral.school_id],
+            (err2, items) => {
+
+                if (err2) return res.send(err2.message);
+
+                if (!items.length) {
+                    return db.all(`
+                        SELECT referrals.*, schools.name AS school_name,
+                               ref_by.name AS referring_student_name, ref_to.name AS referred_student_name
+                        FROM referrals
+                        JOIN schools ON referrals.school_id = schools.id
+                        JOIN students ref_by ON referrals.referring_student_id = ref_by.id
+                        JOIN students ref_to ON referrals.referred_student_id = ref_to.id
+                        ORDER BY referrals.created_at DESC
+                    `, (err3, referrals) => {
+                        res.render("superAdmin/referrals", {
+                            referrals,
+                            error: `Can't apply this reward yet - the referring student has no fee item set up (class-wide or personal) to discount. Set one up first (Fee Structure, or their Total Fee), then try again.`
+                        });
+                    });
+                }
+
+                Promise.all(items.map(item => new Promise((resolve, reject) => {
+                    db.all(
+                        "SELECT SUM(amount_paid) AS paid FROM fee_payments WHERE fee_structure_id=?",
+                        [item.id],
+                        (e, rows) => e ? reject(e) : resolve({ ...item, paid: (rows[0] && rows[0].paid) || 0 })
+                    );
+                }))).then(withPaid => {
+
+                    const target = withPaid.reduce((best, cur) => {
+                        const curDue = cur.amount - cur.paid;
+                        const bestDue = best ? (best.amount - best.paid) : -Infinity;
+                        return curDue > bestDue ? cur : best;
+                    }, null);
+
+                    db.get(
+                        "SELECT id FROM fee_discounts WHERE student_id=? AND fee_structure_id=?",
+                        [referral.referring_student_id, target.id],
+                        (err4, existingDiscount) => {
+
+                            const saveDiscount = existingDiscount
+                                ? (cb) => db.run(
+                                    "UPDATE fee_discounts SET discount_type=?, discount_value=?, reason=? WHERE id=?",
+                                    [referral.reward_type, referral.reward_value, "Referral reward", existingDiscount.id],
+                                    cb
+                                )
+                                : (cb) => db.run(
+                                    `INSERT INTO fee_discounts (student_id, fee_structure_id, discount_type, discount_value, reason, school_id)
+                                     VALUES (?,?,?,?,?,?)`,
+                                    [referral.referring_student_id, target.id, referral.reward_type, referral.reward_value, "Referral reward", referral.school_id],
+                                    cb
+                                );
+
+                            saveDiscount((err5) => {
+                                if (err5) return res.send(err5.message);
+
+                                db.run("UPDATE referrals SET reward_applied=1 WHERE id=?", [req.params.id], () => {
+                                    res.redirect("/super-admin/referrals");
+                                });
+
+                            });
+
+                        }
+                    );
+
+                });
+
+            }
+        );
 
     });
 

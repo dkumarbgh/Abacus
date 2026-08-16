@@ -200,6 +200,36 @@
                         </div>
                     </div>
 
+                    <% if (features.referralProgramme && referralCandidates.length > 0) { %>
+                    <div class="mb-3">
+                        <label class="form-label">Referred By (optional)</label>
+                        <input type="text" id="referredByText" list="referralList" class="form-control"
+                               placeholder="Start typing an existing student's name..." autocomplete="off">
+                        <input type="hidden" name="referred_by_student_id" id="referredByHidden">
+                        <datalist id="referralList">
+                            <% referralCandidates.forEach(function(s){ %>
+                                <option value="<%= s.name %><%= s.admission_no ? ' (' + s.admission_no + ')' : '' %>" data-id="<%= s.id %>">
+                            <% }) %>
+                        </datalist>
+                        <small class="text-muted">If an existing student referred this one, pick them here - the referral gets recorded for the Referral Programme.</small>
+                    </div>
+                    <script>
+                        // <datalist> only submits/shows the option's `value` text,
+                        // not a separate id - so this resolves the typed name back
+                        // to the real student id (in the hidden field that actually
+                        // gets submitted) by matching it against the same list.
+                        (function () {
+                            const textInput = document.getElementById('referredByText');
+                            const hiddenInput = document.getElementById('referredByHidden');
+                            const options = Array.from(document.querySelectorAll('#referralList option'));
+                            textInput.addEventListener('input', function () {
+                                const match = options.find(o => o.value === textInput.value);
+                                hiddenInput.value = match ? match.dataset.id : '';
+                            });
+                        })();
+                    </script>
+                    <% } %>
+
                     <hr>
                     <h6 class="text-muted">Personal Details</h6>
 
@@ -433,7 +463,7 @@
                     <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="addInstallmentRow()">+ Add Installment</button>
 
                     <hr>
-                    <h6 class="text-muted">Photo (used for face-recognition attendance)</h6>
+                    <h6 class="text-muted">Photo<% if (features.faceRecognition) { %> (used for face-recognition attendance)<% } %></h6>
 
                     <div class="mb-3">
                         <label class="form-label">Student Photo</label>

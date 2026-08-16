@@ -28,6 +28,25 @@ function requireRole(...roles) {
 }
 
 /* ===========================================
+   FEATURE FLAGS
+   Blocks a route entirely when its feature is turned off via .env (see
+   config/features.js) - even if someone hits the URL directly, not just
+   hiding the UI entry point. `asJson: true` for API/mobile routes that
+   expect a JSON response rather than an HTML page.
+=========================================== */
+function requireFeature(flagName, { asJson = false } = {}) {
+    return (req, res, next) => {
+        const features = require("../config/features");
+        if (features[flagName]) return next();
+
+        if (asJson) {
+            return res.status(404).json({ ok: false, error: "feature_disabled" });
+        }
+        res.status(404).send("<h3>This feature is turned off for this deployment.</h3><a href='/'>Back to Dashboard</a>");
+    };
+}
+
+/* ===========================================
    API (JWT-based) AUTH - used by the mobile app
    Expects: Authorization: Bearer <token>
 =========================================== */
@@ -52,4 +71,4 @@ function requireApiAuth(req, res, next) {
 
 }
 
-module.exports = { requireLogin, requireRole, requireApiAuth, JWT_SECRET };
+module.exports = { requireLogin, requireRole, requireApiAuth, requireFeature, JWT_SECRET };

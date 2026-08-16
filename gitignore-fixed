@@ -1,0 +1,35 @@
+node_modules/
+flutter/
+whatsapp-session/
+.env
+*.log
+.DS_Store
+Thumbs.db
+*.db
+*.sqlite
+*.sqlite3
+logs/
+.vscode/
+
+# Playwright - GENERATED output only (reports, screenshots, videos, traces).
+# playwright.config.js and tests/ are actual source code and must stay
+# tracked, or the regression suite silently has nothing to run in CI.
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Python virtual environment for face-service - regenerate locally with
+# `python -m venv .venv && pip install -r requirements.txt`, never commit
+# it (large, OS-specific, trivially reproducible).
+face-service/.venv/
+face-service/venv/
+face-service/__pycache__/
+
+# Face-recognition model files (tens of MB) - see face-service/models/README.md
+# for how to (re-)download them instead of committing the binaries.
+face-service/models/*.onnx
+
+# All user-uploaded content - generated at runtime, not source code.
+public/uploads/**
+!public/uploads/.gitkeep

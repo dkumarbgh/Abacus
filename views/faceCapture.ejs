@@ -1,0 +1,144 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>📷 Face Attendance (Laptop Camera)</h2>
+<p class="text-muted">
+    Uses this laptop's webcam. Only works when this page is opened as <code>http://localhost:3000/...</code>
+    on the same machine running the app - browsers block camera access over plain <code>http://</code>
+    from any other address for security reasons.
+</p>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-body">
+
+                <div class="mb-3">
+                    <label class="form-label">Class</label>
+                    <select id="classSelect" class="form-select">
+                        <option value="">Select a class</option>
+                        <% classes.forEach(function(c) { %>
+                            <option value="<%= c.id %>"><%= c.class_name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+
+                <div class="text-center">
+                    <video id="video" autoplay playsinline style="width:100%; max-width:400px; background:#000; border-radius:8px;"></video>
+                    <canvas id="canvas" style="display:none;"></canvas>
+                </div>
+
+                <div class="d-grid gap-2 mt-3">
+                    <button id="startBtn" class="btn btn-outline-primary">Start Camera</button>
+                    <button id="captureBtn" class="btn btn-success" disabled>📸 Capture &amp; Mark Present</button>
+                </div>
+
+                <div id="statusArea" class="mt-3"></div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white"><h5 class="mb-0">Marked This Session</h5></div>
+            <div class="card-body">
+                <ul id="sessionLog" class="list-group">
+                    <li class="list-group-item text-muted">No one marked yet.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const startBtn = document.getElementById('startBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const classSelect = document.getElementById('classSelect');
+    const statusArea = document.getElementById('statusArea');
+    const sessionLog = document.getElementById('sessionLog');
+
+    let stream = null;
+    let loggedAny = false;
+
+    const ERROR_MESSAGES = {
+        no_face_detected: "No face detected - try again with better lighting, facing the camera directly.",
+        multiple_faces: "More than one face in frame - make sure only one person is visible.",
+        no_match: "No matching student found in this class.",
+        no_enrolled_faces_in_class: "No students in this class have an enrolled face yet.",
+        face_service_unreachable: "The face-recognition service isn't running - start face-service/app.py.",
+        class_id_required: "Please select a class first.",
+        no_image_uploaded: "Couldn't capture an image - try again.",
+        student_lookup_failed: "Matched a face but couldn't load that student's record."
+    };
+
+    function showStatus(html, kind) {
+        statusArea.innerHTML = `<div class="alert alert-${kind}">${html}</div>`;
+    }
+
+    startBtn.addEventListener('click', async function () {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            captureBtn.disabled = false;
+            startBtn.textContent = 'Camera Running';
+            startBtn.disabled = true;
+        } catch (e) {
+            showStatus('Could not access the camera: ' + e.message + '. Make sure you allowed camera permission, and that you\'re on http://localhost:3000 (not a LAN IP).', 'danger');
+        }
+    });
+
+    captureBtn.addEventListener('click', async function () {
+
+        if (!classSelect.value) {
+            showStatus(ERROR_MESSAGES.class_id_required, 'warning');
+            return;
+        }
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        captureBtn.disabled = true;
+        showStatus('Checking...', 'info');
+
+        canvas.toBlob(async function (blob) {
+
+            const formData = new FormData();
+            formData.append('image', blob, 'capture.jpg');
+            formData.append('class_id', classSelect.value);
+
+            try {
+                const res = await fetch('/attendance/face-mark-web', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.ok) {
+                    showStatus(`✅ <strong>${data.student.name}</strong> marked Present (confidence ${(data.confidence * 100).toFixed(0)}%)`, 'success');
+
+                    if (!loggedAny) {
+                        sessionLog.innerHTML = '';
+                        loggedAny = true;
+                    }
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between';
+                    li.innerHTML = `<span>${data.student.name}</span><span class="text-muted small">${new Date().toLocaleTimeString()}</span>`;
+                    sessionLog.prepend(li);
+                } else {
+                    showStatus(ERROR_MESSAGES[data.error] || data.error, 'danger');
+                }
+            } catch (e) {
+                showStatus('Request failed: ' + e.message, 'danger');
+            }
+
+            captureBtn.disabled = false;
+
+        }, 'image/jpeg', 0.9);
+
+    });
+})();
+</script>
+
+<%- include("partials/footer") %>
