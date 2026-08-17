@@ -1,0 +1,72 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Certificate Templates</h2>
+    <a href="/certificates/bulk" class="btn btn-outline-primary">📜 Bulk Generate</a>
+</div>
+
+<div class="row">
+
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0">Add a Template</h5></div>
+            <div class="card-body">
+                <form action="/certificates/templates/add" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Template Name</label>
+                        <input type="text" name="name" class="form-control" placeholder="e.g. 2026 Completion Certificate" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Certificate Type</label>
+                        <select name="certificate_type" class="form-select" required>
+                            <% Object.keys(certificateTypes).forEach(function(key) { %>
+                                <option value="<%= key %>"><%= certificateTypes[key] %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Background Image</label>
+                        <input type="file" name="background" accept="image/*" class="form-control" required>
+                        <small class="text-muted">Your sample certificate design (JPEG/PNG). You'll position the text fields on the next screen.</small>
+                    </div>
+                    <button class="btn btn-success w-100">Upload &amp; Position Fields</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white"><h5 class="mb-0">Existing Templates</h5></div>
+            <div class="card-body">
+                <% if (templates.length === 0) { %>
+                    <p class="text-muted">No templates yet - upload one to get started.</p>
+                <% } else { %>
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr><th>Preview</th><th>Name</th><th>Type</th><th>Action</th></tr>
+                        </thead>
+                        <tbody>
+                            <% templates.forEach(function(t) { %>
+                                <tr>
+                                    <td><img src="<%= t.background_path %>" alt="" style="max-width:100px; max-height:70px; object-fit:contain;"></td>
+                                    <td><%= t.name %></td>
+                                    <td><%= certificateTypes[t.certificate_type] || t.certificate_type %></td>
+                                    <td>
+                                        <a href="/certificates/templates/<%= t.id %>/edit-fields" class="btn btn-sm btn-primary">Edit Fields</a>
+                                        <a href="/certificates/templates/<%= t.id %>/delete" class="btn btn-sm btn-outline-danger"
+                                           onclick="return confirm('Delete this template? This cannot be undone.')">Delete</a>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

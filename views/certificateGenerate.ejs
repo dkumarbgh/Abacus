@@ -1,0 +1,62 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Generate Certificate: <%= student.name %></h2>
+
+<% if (templates.length === 0) { %>
+    <div class="alert alert-info">
+        No certificate templates set up yet. <a href="/certificates/templates">Add one first</a>.
+    </div>
+<% } else { %>
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form action="/certificates/generate/<%= student.id %>" method="POST" target="_blank">
+                        <div class="mb-3">
+                            <label class="form-label">Certificate Template</label>
+                            <select name="template_id" id="templateSelect" class="form-select" required>
+                                <option value="">Select a template</option>
+                                <% templates.forEach(function(t) { %>
+                                    <option value="<%= t.id %>"><%= t.name %> (<%= certificateTypes[t.certificate_type] || t.certificate_type %>)</option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" name="date" class="form-control" value="<%= new Date().toISOString().slice(0,10) %>">
+                        </div>
+                        <div id="customFieldsArea"></div>
+                        <button class="btn btn-success w-100">📄 Generate PDF</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<script>
+// Custom fields (anything beyond student_name/date) vary per template -
+// fetch this template's field list and show a text box for each custom one.
+document.getElementById('templateSelect') && document.getElementById('templateSelect').addEventListener('change', async function () {
+    const area = document.getElementById('customFieldsArea');
+    area.innerHTML = '';
+    if (!this.value) return;
+    try {
+        const res = await fetch('/certificates/templates/' + this.value + '/fields.json');
+        const data = await res.json();
+        if (!data.ok) return;
+        data.fields.forEach(f => {
+            const div = document.createElement('div');
+            div.className = 'mb-3';
+            div.innerHTML = `<label class="form-label">${f.label}</label>
+                <input type="text" name="field_${f.field_key}" class="form-control">`;
+            area.appendChild(div);
+        });
+    } catch (e) {
+        console.error('Could not load template fields:', e);
+    }
+});
+</script>
+
+<%- include("partials/footer") %>

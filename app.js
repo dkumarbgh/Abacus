@@ -18,7 +18,7 @@ const fs = require("fs");
 // upload folder here on every startup - cheap, idempotent (no-op if it
 // already exists), and works the same whether this is a fresh clone, a
 // fresh Render deploy, or a folder someone accidentally deleted.
-["students", "tmp", "sheets", "faces"].forEach(dir => {
+["students", "tmp", "sheets", "faces", "certificates"].forEach(dir => {
     fs.mkdirSync(path.join(__dirname, "public/uploads", dir), { recursive: true });
 });
 
@@ -41,6 +41,7 @@ const apiRoutes = require("./routes/api");
 const settingsRoutes = require("./routes/settings");
 const listsRoutes = require("./routes/lists");
 const superAdminRoutes = require("./routes/superAdmin");
+const certificateRoutes = require("./routes/certificates");
 
 
 
@@ -116,6 +117,7 @@ app.use("/reports", reportRoutes);
 app.use("/settings", settingsRoutes);
 app.use("/lists", listsRoutes);
 app.use("/super-admin", superAdminRoutes);
+app.use("/certificates", certificateRoutes);
 
 // Dashboard
 app.get("/", requireLogin, (req, res) => {

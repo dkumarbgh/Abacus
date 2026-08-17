@@ -1,0 +1,193 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/certificates/templates" class="btn btn-outline-secondary btn-sm mb-3">&larr; Templates</a>
+
+<h2>Position Fields: <%= template.name %></h2>
+<p class="text-muted">Drag a field to reposition it. Click a field to edit its style in the panel on the right.</p>
+
+<div class="row">
+
+    <div class="col-md-8 mb-4">
+        <div id="editorCanvas" style="position:relative; display:inline-block; max-width:100%; border:1px solid #ccc;">
+            <img id="bgImage" src="<%= template.background_path %>" style="display:block; max-width:100%; height:auto;">
+        </div>
+        <div class="mt-3">
+            <button id="addFieldBtn" class="btn btn-outline-primary btn-sm">+ Add Custom Field</button>
+            <button id="saveLayoutBtn" class="btn btn-success btn-sm">💾 Save Layout</button>
+            <span id="saveStatus" class="ms-2 small text-muted"></span>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0">Selected Field</h5></div>
+            <div class="card-body" id="stylencardBody">
+                <p class="text-muted small" id="noSelectionMsg">Click a field on the image to edit it here.</p>
+                <div id="styleControls" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label small">Label</label>
+                        <input type="text" id="ctrlLabel" class="form-control form-control-sm" disabled>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Font Size</label>
+                        <input type="number" id="ctrlFontSize" class="form-control form-control-sm" min="6" max="120">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Color</label>
+                        <input type="color" id="ctrlColor" class="form-control form-control-sm form-control-color">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Alignment</label>
+                        <select id="ctrlAlign" class="form-select form-select-sm">
+                            <option value="left">Left</option>
+                            <option value="center">Center</option>
+                            <option value="right">Right</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input type="checkbox" id="ctrlBold" class="form-check-input">
+                        <label class="form-check-label small" for="ctrlBold">Bold</label>
+                    </div>
+                    <button id="removeFieldBtn" class="btn btn-outline-danger btn-sm w-100">Remove This Field</button>
+                </div>
+            </div>
+        </div>
+        <p class="small text-muted mt-3">
+            <strong>student_name</strong> and <strong>date</strong> are filled in automatically when a
+            certificate is generated. Any other field you add will be asked for as a text box at
+            generation time (e.g. "Course Name") - the same value applies to everyone in a bulk run.
+        </p>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    const canvas = document.getElementById('editorCanvas');
+    const img = document.getElementById('bgImage');
+
+    let fields = <%- JSON.stringify(fields.map(f => ({
+        field_key: f.field_key, label: f.label, x_pct: f.x_pct, y_pct: f.y_pct,
+        font_size: f.font_size, font_color: f.font_color, bold: !!f.bold, text_align: f.text_align
+    }))) %>;
+
+    let selectedIndex = null;
+    let dragIndex = null;
+
+    function render() {
+        canvas.querySelectorAll('.field-marker').forEach(el => el.remove());
+        fields.forEach((f, i) => {
+            const el = document.createElement('div');
+            el.className = 'field-marker';
+            el.textContent = f.label;
+            el.dataset.index = i;
+            el.style.position = 'absolute';
+            el.style.left = f.x_pct + '%';
+            el.style.top = f.y_pct + '%';
+            el.style.transform = 'translate(-50%, -50%)';
+            el.style.padding = '2px 8px';
+            el.style.border = i === selectedIndex ? '2px solid #0d6efd' : '1px dashed #999';
+            el.style.background = 'rgba(255,255,255,0.75)';
+            el.style.cursor = 'move';
+            el.style.fontSize = Math.min(f.font_size, 20) + 'px';
+            el.style.fontWeight = f.bold ? 'bold' : 'normal';
+            el.style.color = f.font_color || '#000';
+            el.style.userSelect = 'none';
+            el.style.whiteSpace = 'nowrap';
+
+            el.addEventListener('mousedown', (e) => {
+                dragIndex = i;
+                selectField(i);
+                e.preventDefault();
+            });
+
+            canvas.appendChild(el);
+        });
+    }
+
+    function selectField(i) {
+        selectedIndex = i;
+        const f = fields[i];
+        document.getElementById('noSelectionMsg').style.display = 'none';
+        document.getElementById('styleControls').style.display = 'block';
+        document.getElementById('ctrlLabel').value = f.label;
+        document.getElementById('ctrlFontSize').value = f.font_size;
+        document.getElementById('ctrlColor').value = f.font_color || '#000000';
+        document.getElementById('ctrlAlign').value = f.text_align || 'center';
+        document.getElementById('ctrlBold').checked = !!f.bold;
+        render();
+    }
+
+    document.addEventListener('mousemove', (e) => {
+        if (dragIndex === null) return;
+        const rect = canvas.getBoundingClientRect();
+        let xPct = ((e.clientX - rect.left) / rect.width) * 100;
+        let yPct = ((e.clientY - rect.top) / rect.height) * 100;
+        xPct = Math.max(0, Math.min(100, xPct));
+        yPct = Math.max(0, Math.min(100, yPct));
+        fields[dragIndex].x_pct = Math.round(xPct * 10) / 10;
+        fields[dragIndex].y_pct = Math.round(yPct * 10) / 10;
+        render();
+    });
+
+    document.addEventListener('mouseup', () => { dragIndex = null; });
+
+    ['ctrlFontSize', 'ctrlColor', 'ctrlAlign', 'ctrlBold'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+            if (selectedIndex === null) return;
+            const f = fields[selectedIndex];
+            f.font_size = parseInt(document.getElementById('ctrlFontSize').value) || 20;
+            f.font_color = document.getElementById('ctrlColor').value;
+            f.text_align = document.getElementById('ctrlAlign').value;
+            f.bold = document.getElementById('ctrlBold').checked;
+            render();
+        });
+    });
+
+    document.getElementById('removeFieldBtn').addEventListener('click', () => {
+        if (selectedIndex === null) return;
+        if (fields[selectedIndex].field_key === 'student_name' || fields[selectedIndex].field_key === 'date') {
+            if (!confirm('This is a built-in field (' + fields[selectedIndex].field_key + '). Remove it anyway?')) return;
+        }
+        fields.splice(selectedIndex, 1);
+        selectedIndex = null;
+        document.getElementById('noSelectionMsg').style.display = 'block';
+        document.getElementById('styleControls').style.display = 'none';
+        render();
+    });
+
+    document.getElementById('addFieldBtn').addEventListener('click', () => {
+        const label = prompt('Field label (e.g. "Course Name"):');
+        if (!label || !label.trim()) return;
+        const key = 'custom_' + label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        fields.push({
+            field_key: key || ('custom_' + Date.now()),
+            label: label.trim(),
+            x_pct: 50, y_pct: 50,
+            font_size: 20, font_color: '#000000', bold: false, text_align: 'center'
+        });
+        selectField(fields.length - 1);
+    });
+
+    document.getElementById('saveLayoutBtn').addEventListener('click', async () => {
+        const statusEl = document.getElementById('saveStatus');
+        statusEl.textContent = 'Saving...';
+        try {
+            const res = await fetch('/certificates/templates/<%= template.id %>/fields', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields })
+            });
+            const data = await res.json();
+            statusEl.textContent = data.ok ? '✅ Saved' : ('Error: ' + data.error);
+        } catch (e) {
+            statusEl.textContent = 'Save failed: ' + e.message;
+        }
+    });
+
+    if (img.complete) render(); else img.addEventListener('load', render);
+})();
+</script>
+
+<%- include("partials/footer") %>

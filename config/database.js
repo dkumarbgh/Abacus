@@ -362,6 +362,64 @@ async function migrate() {
     `);
     await addColumnIfMissing("lookup_items", "sessions_per_week", "INTEGER");
 
+    // Certificates: an Admin uploads a background image per certificate
+    // type (Completion, Attendance, Merit, Transfer, or any custom type),
+    // then positions text fields (Student Name, Date, etc.) on top of it
+    // using a click-to-place visual editor. Generating a certificate later
+    // just overlays those fields' real values onto the same background at
+    // the same positions, as a PDF.
+    await run(`
+        CREATE TABLE IF NOT EXISTS certificate_templates(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            certificate_type TEXT NOT NULL, -- 'completion' | 'attendance' | 'merit' | 'transfer' | custom label
+            background_path TEXT NOT NULL,
+            image_width INTEGER NOT NULL,   -- original uploaded image's pixel size - field
+            image_height INTEGER NOT NULL,  -- positions are stored as % of this, so they stay
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- correct regardless of the image's actual resolution
+            FOREIGN KEY(school_id) REFERENCES schools(id)
+        )
+    `);
+
+    // Positioned text fields for a template - x_pct/y_pct are percentages
+    // (0-100) of the background image's width/height, not pixels, so the
+    // same layout works correctly no matter what size the source image is.
+    await run(`
+        CREATE TABLE IF NOT EXISTS certificate_fields(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL,
+            field_key TEXT NOT NULL,    -- 'student_name' | 'date' | 'course_name' | 'custom_1' etc.
+            label TEXT NOT NULL,        -- shown in the editor, e.g. "Student Name"
+            x_pct REAL NOT NULL,
+            y_pct REAL NOT NULL,
+            font_size INTEGER NOT NULL DEFAULT 24,
+            font_color TEXT NOT NULL DEFAULT '#000000',
+            bold INTEGER NOT NULL DEFAULT 0,
+            text_align TEXT NOT NULL DEFAULT 'center', -- left | center | right
+            FOREIGN KEY(template_id) REFERENCES certificate_templates(id)
+        )
+    `);
+
+    // A log of every certificate actually generated - lets staff reprint
+    // one later without re-entering the custom field values, and gives an
+    // audit trail of who's been issued what.
+    await run(`
+        CREATE TABLE IF NOT EXISTS certificates_issued(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            template_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            issued_date TEXT NOT NULL,
+            custom_values TEXT, -- JSON: { field_key: value } for any fields beyond student_name/date
+            issued_by INTEGER,  -- users.id of whoever generated it
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id) REFERENCES schools(id),
+            FOREIGN KEY(template_id) REFERENCES certificate_templates(id),
+            FOREIGN KEY(student_id) REFERENCES students(id)
+        )
+    `);
+
     // Referral programme: an existing student refers a prospective new
     // student; when that new student enrolls, school staff record who
     // referred them right on the Student Add form. The reward/discount

@@ -3,7 +3,10 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 no-print">
     <h2>Student Report</h2>
-    <button class="btn btn-outline-secondary" onclick="window.print()">🖨 Print</button>
+    <div>
+        <a href="/certificates/generate/<%= student.id %>" class="btn btn-outline-primary" target="_blank">📜 Generate Certificate</a>
+        <button class="btn btn-outline-secondary" onclick="window.print()">🖨 Print</button>
+    </div>
 </div>
 
 <div class="card shadow mb-4">
