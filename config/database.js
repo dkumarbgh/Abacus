@@ -420,6 +420,145 @@ async function migrate() {
         )
     `);
 
+    // message_logs originally assumed WhatsApp only (phone required, no
+    // channel/email concept). Rebuild to support Email alongside it -
+    // phone becomes optional, email is new, channel says which was used.
+    // Existing rows are preserved and backfilled as channel='whatsapp'
+    // (they all were, before this migration existed). school_id is
+    // preserved directly here since the generic MULTI_TENANT_TABLES loop
+    // that normally adds it already ran earlier in this same migrate() -
+    // rebuilding afterward without it here would silently drop it.
+    const messageLogsInfo = await get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='message_logs'`);
+    if (messageLogsInfo && messageLogsInfo.sql.includes("phone TEXT NOT NULL") && !messageLogsInfo.sql.includes("channel")) {
+
+        // The generic school_id-backfill loop for MULTI_TENANT_TABLES runs
+        // LATER in this same migrate() - on a fresh DB, message_logs won't
+        // have school_id yet at this point; on an existing DB upgrading
+        // from an earlier version, it already does, WITH real per-school
+        // values that must not be lost. Handle both correctly instead of
+        // assuming either one.
+        const oldColumns = await all(`PRAGMA table_info(message_logs)`);
+        const hadSchoolId = oldColumns.some(c => c.name === "school_id");
+
+        await run(`
+            CREATE TABLE message_logs_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER,
+                phone TEXT,
+                email TEXT,
+                channel TEXT NOT NULL DEFAULT 'whatsapp',
+                type TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL,
+                school_id INTEGER,
+                sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(student_id) REFERENCES students(id)
+            )
+        `);
+        await run(`
+            INSERT INTO message_logs_new (id, student_id, phone, channel, type, message, status, school_id, sent_at)
+            SELECT id, student_id, phone, 'whatsapp', type, message, status, ${hadSchoolId ? "school_id" : "NULL"}, sent_at FROM message_logs
+        `);
+        await run(`DROP TABLE message_logs`);
+        await run(`ALTER TABLE message_logs_new RENAME TO message_logs`);
+        console.log("[migration] Rebuilt message_logs - now supports Email alongside WhatsApp.");
+    }
+
+    // Abacus test paper settings, per Level - only meaningful for
+    // list_type='level' (same pattern as batch.sessions_per_week). Lets
+    // each level have its own difficulty defaults for auto-generated
+    // arithmetic practice/test papers.
+    await addColumnIfMissing("lookup_items", "digit_count", "INTEGER");     // digits per number, e.g. 2
+    await addColumnIfMissing("lookup_items", "operand_count", "INTEGER");   // numbers summed per problem, e.g. 5
+    await addColumnIfMissing("lookup_items", "problem_count", "INTEGER");   // problems per paper, e.g. 20
+    await addColumnIfMissing("lookup_items", "include_subtraction", "INTEGER NOT NULL DEFAULT 0");
+
+    // Email (SMTP) - deployment-wide config via .env, same pattern as
+    // FACE_SERVICE_URL/JWT_SECRET etc. Not stored in the DB - see
+    // services/emailClient.js and .env.example.
+
+    // Saved Abacus test papers - a generated paper now persists to disk +
+    // this record, instead of being purely ephemeral (streamed once and
+    // gone). Lets staff view/re-download/re-send a specific paper later
+    // for reference, rather than being forced to regenerate a brand new
+    // (differently randomized) one every time. level_name is snapshotted
+    // in case the Level gets renamed or deleted afterward.
+    await run(`
+        CREATE TABLE IF NOT EXISTS test_papers_generated(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            level_id INTEGER,
+            level_name TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'generated', -- 'generated' | 'uploaded'
+            digit_count INTEGER,
+            operand_count INTEGER,
+            problem_count INTEGER,
+            include_subtraction INTEGER NOT NULL DEFAULT 0,
+            paper_date TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            generated_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id) REFERENCES schools(id)
+        )
+    `);
+
+    // Existing deployments created this table before "uploaded" papers
+    // existed, with digit/operand/problem_count as NOT NULL (meaningless
+    // for an uploaded file, which has no generated-problem settings at
+    // all) and no `source` column. Rebuild to relax those constraints,
+    // preserving every existing row as source='generated' (they all were,
+    // before this migration existed).
+    const testPapersInfo = await get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='test_papers_generated'`);
+    if (testPapersInfo && testPapersInfo.sql.includes("digit_count INTEGER NOT NULL") && !testPapersInfo.sql.includes("source")) {
+        await run(`
+            CREATE TABLE test_papers_generated_new(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                school_id INTEGER NOT NULL,
+                level_id INTEGER,
+                level_name TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'generated',
+                digit_count INTEGER,
+                operand_count INTEGER,
+                problem_count INTEGER,
+                include_subtraction INTEGER NOT NULL DEFAULT 0,
+                paper_date TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                generated_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(school_id) REFERENCES schools(id)
+            )
+        `);
+        await run(`
+            INSERT INTO test_papers_generated_new
+            (id, school_id, level_id, level_name, source, digit_count, operand_count, problem_count, include_subtraction, paper_date, file_path, generated_by, created_at)
+            SELECT id, school_id, level_id, level_name, 'generated', digit_count, operand_count, problem_count, include_subtraction, paper_date, file_path, generated_by, created_at
+            FROM test_papers_generated
+        `);
+        await run(`DROP TABLE test_papers_generated`);
+        await run(`ALTER TABLE test_papers_generated_new RENAME TO test_papers_generated`);
+        console.log("[migration] Rebuilt test_papers_generated - now supports manually uploaded papers too.");
+    }
+
+    // Level promotion history - every time a student's Level changes (via
+    // the Promote Level page, single or bulk), this logs the before/after
+    // so there's an audit trail of academic progression, and so a
+    // "which level did they just complete" question always has a real
+    // answer (used when generating a Level Completion certificate).
+    await run(`
+        CREATE TABLE IF NOT EXISTS level_history(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            old_level_id INTEGER,
+            new_level_id INTEGER NOT NULL,
+            changed_date TEXT NOT NULL,
+            changed_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id) REFERENCES schools(id),
+            FOREIGN KEY(student_id) REFERENCES students(id)
+        )
+    `);
+
     // Referral programme: an existing student refers a prospective new
     // student; when that new student enrolls, school staff record who
     // referred them right on the Student Add form. The reward/discount

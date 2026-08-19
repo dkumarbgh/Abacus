@@ -78,6 +78,7 @@
                                 <td><%= new Date(s.uploaded_at).toLocaleDateString() %></td>
                                 <td>
                                     <a href="<%= s.file_path %>" target="_blank" class="btn btn-outline-primary btn-sm">⬇ Download</a>
+                                    <a href="/practice-sheets/<%= s.id %>/send" class="btn btn-outline-success btn-sm">📤 Send</a>
                                     <a href="/practice-sheets/delete/<%= s.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this sheet?')">Delete</a>
                                 </td>
                             </tr>

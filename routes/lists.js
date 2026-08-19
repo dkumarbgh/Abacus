@@ -40,15 +40,24 @@ router.get("/", requireRole("Admin"), (req, res) => {
 ========================================== */
 router.post("/add", requireRole("Admin"), (req, res) => {
 
-    const { list_type, name, sessions_per_week } = req.body;
+    const { list_type, name, sessions_per_week, digit_count, operand_count, problem_count, include_subtraction } = req.body;
 
     if (!LIST_TYPES[list_type] || !name || !name.trim()) {
         return res.redirect("/lists");
     }
 
     db.run(
-        "INSERT INTO lookup_items (school_id, list_type, name, sessions_per_week) VALUES (?,?,?,?)",
-        [req.schoolId, list_type, name.trim(), list_type === "batch" ? (parseInt(sessions_per_week) || null) : null],
+        `INSERT INTO lookup_items
+         (school_id, list_type, name, sessions_per_week, digit_count, operand_count, problem_count, include_subtraction)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [
+            req.schoolId, list_type, name.trim(),
+            list_type === "batch" ? (parseInt(sessions_per_week) || null) : null,
+            list_type === "level" ? (parseInt(digit_count) || null) : null,
+            list_type === "level" ? (parseInt(operand_count) || null) : null,
+            list_type === "level" ? (parseInt(problem_count) || null) : null,
+            list_type === "level" ? (include_subtraction === "on" ? 1 : 0) : 0
+        ],
         (err) => {
             if (err) return res.send(err.message);
             res.redirect("/lists");
@@ -76,7 +85,7 @@ router.get("/edit/:id", requireRole("Admin"), (req, res) => {
 
 router.post("/edit/:id", requireRole("Admin"), (req, res) => {
 
-    const { name, sessions_per_week } = req.body;
+    const { name, sessions_per_week, digit_count, operand_count, problem_count, include_subtraction } = req.body;
 
     db.get(
         "SELECT list_type FROM lookup_items WHERE id=? AND school_id=?",
@@ -87,8 +96,18 @@ router.post("/edit/:id", requireRole("Admin"), (req, res) => {
             if (!item) return res.send("Not found");
 
             db.run(
-                "UPDATE lookup_items SET name=?, sessions_per_week=? WHERE id=? AND school_id=?",
-                [name.trim(), item.list_type === "batch" ? (parseInt(sessions_per_week) || null) : null, req.params.id, req.schoolId],
+                `UPDATE lookup_items
+                 SET name=?, sessions_per_week=?, digit_count=?, operand_count=?, problem_count=?, include_subtraction=?
+                 WHERE id=? AND school_id=?`,
+                [
+                    name.trim(),
+                    item.list_type === "batch" ? (parseInt(sessions_per_week) || null) : null,
+                    item.list_type === "level" ? (parseInt(digit_count) || null) : null,
+                    item.list_type === "level" ? (parseInt(operand_count) || null) : null,
+                    item.list_type === "level" ? (parseInt(problem_count) || null) : null,
+                    item.list_type === "level" ? (include_subtraction === "on" ? 1 : 0) : 0,
+                    req.params.id, req.schoolId
+                ],
                 (err2) => {
                     if (err2) return res.send(err2.message);
                     res.redirect("/lists");

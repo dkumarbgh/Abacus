@@ -1,0 +1,202 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>🧮 Abacus Test Papers</h2>
+<p class="text-muted">Generate a randomized arithmetic practice/test paper for a Level, or upload one you've made yourself. Every paper is saved here for later reference - view it again, or send it to students, any time.</p>
+
+<% if (levels.length === 0) { %>
+    <div class="alert alert-info">No Levels set up yet. <a href="/lists">Add some first</a> (and set their digit/problem-count defaults while you're there).</div>
+<% } else { %>
+
+<div class="row">
+    <div class="col-md-7 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0">Generate a Paper</h5></div>
+            <div class="card-body">
+                <form id="generateForm">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0">Level</label>
+                            <select name="level_id" id="levelSelect" class="form-select" required>
+                                <option value="">Select a level</option>
+                                <% levels.forEach(function(l) { %>
+                                    <option value="<%= l.id %>"
+                                        data-digit="<%= l.digit_count || 2 %>"
+                                        data-operand="<%= l.operand_count || 5 %>"
+                                        data-problems="<%= l.problem_count || 20 %>"
+                                        data-sub="<%= l.include_subtraction ? 1 : 0 %>">
+                                        <%= l.name %>
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0">Paper Date</label>
+                            <input type="date" name="paper_date" class="form-control" value="<%= new Date().toISOString().slice(0,10) %>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Digits/Number</label>
+                            <input type="number" name="digit_count" id="digitCount" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Numbers/Problem</label>
+                            <input type="number" name="operand_count" id="operandCount" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Problems/Paper</label>
+                            <input type="number" name="problem_count" id="problemCount" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-check mt-2 mb-2">
+                        <input type="checkbox" name="include_subtraction" id="includeSubtraction" class="form-check-input">
+                        <label class="form-check-label small" for="includeSubtraction">Mix in subtraction</label>
+                    </div>
+                    <small class="text-muted d-block mb-3">Pre-fills from the Level's saved defaults - change any of these just for this one paper.</small>
+                    <button type="submit" class="btn btn-success" id="generateBtn">🧮 Generate &amp; Save Paper</button>
+                    <span id="generateStatus" class="ms-2 small"></span>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0">Or Upload a Paper</h5></div>
+            <div class="card-body">
+                <form id="uploadForm">
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">Level</label>
+                        <select name="level_id" class="form-select" required>
+                            <option value="">Select a level</option>
+                            <% levels.forEach(function(l) { %>
+                                <option value="<%= l.id %>"><%= l.name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">Paper Date</label>
+                        <input type="date" name="paper_date" class="form-control" value="<%= new Date().toISOString().slice(0,10) %>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">File (PDF)</label>
+                        <input type="file" name="file" accept="application/pdf" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-secondary" id="uploadBtn">⬆ Upload &amp; Save</button>
+                    <span id="uploadStatus" class="ms-2 small"></span>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-success text-white"><h5 class="mb-0">Saved Test Papers</h5></div>
+    <div class="card-body">
+        <div id="savedPapersArea">
+            <%- include("partials/testPapersTable", { savedPapers: savedPapers }) %>
+        </div>
+    </div>
+</div>
+
+<% } %>
+
+<script>
+const levelSelect = document.getElementById('levelSelect');
+function applyLevelDefaults() {
+    const opt = levelSelect.selectedOptions[0];
+    if (!opt || !opt.value) return;
+    document.getElementById('digitCount').value = opt.dataset.digit;
+    document.getElementById('operandCount').value = opt.dataset.operand;
+    document.getElementById('problemCount').value = opt.dataset.problems;
+    document.getElementById('includeSubtraction').checked = opt.dataset.sub === '1';
+}
+if (levelSelect) levelSelect.addEventListener('change', applyLevelDefaults);
+
+async function refreshSavedPapers() {
+    const res = await fetch('/test-papers/list.json');
+    const data = await res.json();
+    if (!data.ok) return;
+    const area = document.getElementById('savedPapersArea');
+    area.innerHTML = buildSavedPapersTable(data.papers);
+}
+
+function buildSavedPapersTable(papers) {
+    if (papers.length === 0) {
+        return '<p class="text-muted">No papers generated yet - use the form above to create your first one.</p>';
+    }
+    const rows = papers.map(p => `
+        <tr>
+            <td>${p.level_name}</td>
+            <td>${p.source === 'uploaded' ? '<span class="badge bg-secondary">Uploaded</span>' : '<span class="badge bg-primary">Generated</span>'}</td>
+            <td>${p.paper_date}</td>
+            <td>${p.source === 'uploaded' ? '-' : `${p.problem_count} (${p.digit_count}-digit, ${p.operand_count}/problem${p.include_subtraction ? ', +/-' : ''})`}</td>
+            <td>${p.created_at}</td>
+            <td>
+                <a href="/test-papers/${p.id}/view" class="btn btn-sm btn-outline-primary" target="_blank">👁 View</a>
+                <a href="/test-papers/${p.id}/send" class="btn btn-sm btn-success">📤 Send</a>
+                <a href="/test-papers/${p.id}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this saved paper? This cannot be undone.')">Delete</a>
+            </td>
+        </tr>
+    `).join('');
+    return `
+        <table class="table table-bordered table-hover">
+            <thead class="table-dark">
+                <tr><th>Level</th><th>Source</th><th>Paper Date</th><th>Problems</th><th>Generated/Uploaded On</th><th>Action</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+document.getElementById('generateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('generateBtn');
+    const status = document.getElementById('generateStatus');
+    btn.disabled = true;
+    status.textContent = 'Generating...';
+
+    try {
+        const formData = new FormData(e.target);
+        // Checkboxes are OMITTED from FormData entirely when unchecked -
+        // explicitly set on/off so unchecking this actually overrides the
+        // Level's default, instead of the field going missing and the
+        // server falling back to what the Level normally has set.
+        formData.set('include_subtraction', document.getElementById('includeSubtraction').checked ? 'on' : 'off');
+
+        const res = await fetch('/test-papers/generate', { method: 'POST', body: new URLSearchParams(formData) });
+        const data = await res.json();
+        if (!data.ok) { status.textContent = 'Error: ' + data.error; btn.disabled = false; return; }
+
+        status.textContent = '✅ Saved.';
+        window.open(data.viewUrl, '_blank');
+        await refreshSavedPapers(); // updates the list on THIS page automatically - no manual refresh needed
+    } catch (err) {
+        status.textContent = 'Failed: ' + err.message;
+    }
+    btn.disabled = false;
+});
+
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('uploadBtn');
+    const status = document.getElementById('uploadStatus');
+    btn.disabled = true;
+    status.textContent = 'Uploading...';
+
+    try {
+        const formData = new FormData(e.target);
+        const res = await fetch('/test-papers/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!data.ok) { status.textContent = 'Error: ' + data.error; btn.disabled = false; return; }
+
+        status.textContent = '✅ Uploaded.';
+        e.target.reset();
+        await refreshSavedPapers();
+    } catch (err) {
+        status.textContent = 'Failed: ' + err.message;
+    }
+    btn.disabled = false;
+});
+</script>
+
+<%- include("partials/footer") %>

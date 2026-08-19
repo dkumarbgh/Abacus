@@ -12,6 +12,87 @@ const { getElapsedInfo, computeExpected, classifyRegularity } = require("../serv
 router.use(requireLogin);
 
 /* ===========================================
+   ATTENDANCE AFTER DUE DATE
+   For students whose Fee Due Date has already passed, counts how many
+   classes they've attended SINCE that date - a collections/compliance
+   view: are students continuing to attend despite an overdue fee? Only
+   students with a Fee Due Date set are included (same "due-date-driven"
+   scoping as the Fees Due Report), and only ones whose due date is
+   actually in the past (a future due date has nothing to report yet).
+=========================================== */
+router.get("/attendance-after-due-date", (req, res) => {
+
+    const schoolId = req.schoolId;
+    const classId = req.query.class_id || "";
+    const batchId = req.query.batch_id || "";
+    const studentName = (req.query.student_name || "").trim();
+    const today = new Date().toISOString().slice(0, 10);
+
+    Promise.all([
+        dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId]),
+        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
+        getSimpleFeeMode(schoolId)
+    ]).then(([classes, batches, simpleFeeMode]) => {
+
+        let sql = `
+            SELECT students.id, students.name, students.admission_no, students.fee_due_date,
+                   classes.class_name,
+                   COUNT(CASE WHEN attendance.status='Present' AND attendance.attendance_date > students.fee_due_date THEN 1 END) AS attended_after_due
+            FROM students
+            LEFT JOIN classes ON students.class_id = classes.id
+            LEFT JOIN attendance ON attendance.student_id = students.id
+            WHERE students.school_id = ?
+              AND students.fee_due_date IS NOT NULL
+              AND students.fee_due_date != ''
+              AND students.fee_due_date < ?
+        `;
+        const params = [schoolId, today];
+
+        if (classId) { sql += " AND students.class_id = ?"; params.push(classId); }
+        if (batchId) { sql += " AND students.batch_id = ?"; params.push(batchId); }
+        if (studentName) { sql += " AND students.name LIKE ?"; params.push(`%${studentName}%`); }
+
+        sql += " GROUP BY students.id ORDER BY attended_after_due DESC, students.name";
+
+        db.all(sql, params, (err, rows) => {
+
+            if (err) return res.send(err.message);
+
+            if (rows.length === 0) {
+                return res.render("attendanceAfterDueDateReport", {
+                    classes, batches, rows: [], classId, batchId, studentName, simpleFeeMode
+                });
+            }
+
+            // Whole-school dues in one pass (classId omitted = every
+            // student), then just match each row to its total due by id -
+            // reuses the exact same fee logic as every other fee report,
+            // so "Pending"/"Paid" here always agrees with Fees Due/Pending.
+            computeDuesByClass(schoolId, null, (err2, duesResults) => {
+
+                if (err2) return res.send(err2.message);
+
+                const duesById = {};
+                duesResults.forEach(r => { duesById[r.student.id] = r.totalDue; });
+
+                const withFeeStatus = rows.map(r => ({
+                    ...r,
+                    totalDue: duesById[r.id] || 0
+                }));
+
+                res.render("attendanceAfterDueDateReport", {
+                    classes, batches, rows: withFeeStatus, classId, batchId, studentName, simpleFeeMode
+                });
+
+            });
+
+        });
+
+    }).catch(err => res.send(err.message));
+
+});
+
+/* ===========================================
    ATTENDANCE REGULARITY REPORT
    Student-wise, month-wise: how many classes each student attended so far
    this month vs. how many were expected, based on THEIR OWN batch's
@@ -677,5 +758,12 @@ router.get("/receipt/:paymentId", (req, res) => {
     );
 
 });
+
+function dbGet(sql, params) {
+    return new Promise((resolve, reject) => db.get(sql, params, (err, row) => err ? reject(err) : resolve(row)));
+}
+function dbAll(sql, params) {
+    return new Promise((resolve, reject) => db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows)));
+}
 
 module.exports = router;

@@ -22,7 +22,8 @@ const CERTIFICATE_TYPES = {
     completion: "Course Completion",
     attendance: "Attendance",
     merit: "Merit / Achievement",
-    transfer: "Transfer Certificate"
+    transfer: "Transfer Certificate",
+    level_completion: "Level Completion"
 };
 
 // Fields every template gets by default when created - Admin can add more

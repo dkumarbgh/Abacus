@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const qrcodeImg = require("qrcode");
 const fs = require("fs");
@@ -204,12 +204,13 @@ function toChatId(phone) {
  * @param {object} opts
  * @param {string} opts.phone
  * @param {string} opts.message
+ * @param {string|null} [opts.attachmentPath] - absolute file path to attach (e.g. a test paper/practice sheet PDF). `message` becomes the caption when this is set.
  * @param {number|null} [opts.studentId]
  * @param {string} [opts.type] - FEE_REMINDER | ATTENDANCE_ALERT | EXAM_RESULT | CUSTOM
  * @param {number|null} [opts.schoolId]
  * @returns {Promise<string>} "SENT" or "FAILED"
  */
-function sendMessage({ phone, message, studentId = null, type = "CUSTOM", schoolId = null }) {
+function sendMessage({ phone, message, attachmentPath = null, studentId = null, type = "CUSTOM", schoolId = null }) {
     return new Promise((resolve) => {
         const logResult = (status) => {
             db.run(
@@ -230,9 +231,15 @@ function sendMessage({ phone, message, studentId = null, type = "CUSTOM", school
             return logResult("FAILED");
         }
 
-        client.sendMessage(toChatId(phone), message)
+        const sendPromise = attachmentPath
+            ? MessageMedia.fromFilePath(attachmentPath).then(media =>
+                client.sendMessage(toChatId(phone), media, { caption: message })
+              )
+            : client.sendMessage(toChatId(phone), message);
+
+        sendPromise
             .then(() => {
-                log("info", "Sent OK to", phone, "type:", type);
+                log("info", "Sent OK to", phone, "type:", type, attachmentPath ? "(with attachment)" : "");
                 logResult("SENT");
             })
             .catch((err) => {

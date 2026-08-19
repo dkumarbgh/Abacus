@@ -27,7 +27,8 @@ const features = {
     faceRecognition: flag("FEATURE_FACE_RECOGNITION"),
     whatsapp: flag("FEATURE_WHATSAPP"),
     referralProgramme: flag("FEATURE_REFERRAL_PROGRAMME"),
-    studentImportExport: flag("FEATURE_STUDENT_IMPORT_EXPORT")
+    studentImportExport: flag("FEATURE_STUDENT_IMPORT_EXPORT"),
+    email: flag("FEATURE_EMAIL")
 };
 
 module.exports = features;

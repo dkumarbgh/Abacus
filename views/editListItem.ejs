@@ -20,6 +20,29 @@
                             <small class="text-muted">Used to work out each student's expected classes per month (roughly &times;4).</small>
                         </div>
                     <% } %>
+                    <% if (item.list_type === 'level') { %>
+                        <hr>
+                        <h6 class="text-muted">Abacus Test Paper Defaults</h6>
+                        <p class="small text-muted">Used when generating a randomized practice/test paper for this level.</p>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small">Digits per Number</label>
+                                <input type="number" name="digit_count" class="form-control" value="<%= item.digit_count || '' %>" placeholder="e.g. 2">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small">Numbers per Problem</label>
+                                <input type="number" name="operand_count" class="form-control" value="<%= item.operand_count || '' %>" placeholder="e.g. 5">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small">Problems per Paper</label>
+                                <input type="number" name="problem_count" class="form-control" value="<%= item.problem_count || '' %>" placeholder="e.g. 20">
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" name="include_subtraction" id="incSub" class="form-check-input" <%= item.include_subtraction ? "checked" : "" %>>
+                            <label class="form-check-label small" for="incSub">Mix in subtraction (not just addition)</label>
+                        </div>
+                    <% } %>
                     <button class="btn btn-primary">Save Changes</button>
                     <a href="/lists" class="btn btn-secondary">Cancel</a>
                 </form>
