@@ -15,18 +15,9 @@
                     </div>
                     <% if (item.list_type === 'batch') { %>
                         <div class="mb-3">
-                            <label class="form-label">Level</label>
-                            <select name="level_id" class="form-select">
-                                <option value="">No Level</option>
-                                <% levels.forEach(function(l) { %>
-                                    <option value="<%= l.id %>" <%= item.level_id === l.id ? "selected" : "" %>><%= l.name %></option>
-                                <% }) %>
-                            </select>
-                        </div>
-                        <div class="mb-3">
                             <label class="form-label">Sessions per Week</label>
                             <input type="number" name="sessions_per_week" class="form-control" value="<%= item.sessions_per_week || '' %>">
-                            <small class="text-muted">Used to work out each student's expected classes per month (roughly &times;4).</small>
+                            <small class="text-muted">Used to work out each student's expected classes per month (roughly &times;4). A batch can include students from different Levels.</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label d-block">Default Days</label>

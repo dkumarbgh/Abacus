@@ -41,7 +41,7 @@
             <div class="card-body">
                 <table class="table table-bordered table-hover">
                     <thead class="table-dark">
-                        <tr><th>Name</th><th>Roll No.</th><th>Class</th><th>Action</th></tr>
+                        <tr><th>Name</th><th>Roll No.</th><th>Level</th><th>Action</th></tr>
                     </thead>
                     <tbody>
                         <% if (roster.length === 0) { %>
@@ -51,7 +51,7 @@
                             <tr>
                                 <td><a href="/reports/student/<%= s.id %>"><%= s.name %></a></td>
                                 <td><%= s.admission_no || '-' %></td>
-                                <td><%= s.class_name || '-' %></td>
+                                <td><%= s.level_name || '-' %></td>
                                 <td>
                                     <form action="/lists/batches/<%= batch.id %>/remove-student/<%= s.id %>" method="POST"
                                           onclick="return confirm('Remove <%= s.name %> from this batch?')">

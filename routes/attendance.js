@@ -133,15 +133,13 @@ router.get("/", (req, res) => {
     const schoolId = req.schoolId;
 
     Promise.all([
-        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
         dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
         getDefaultHoursAttended(schoolId)
-    ]).then(([levels, batches, defaultHours]) => {
+    ]).then(([batches, defaultHours]) => {
         res.render("attendance", {
-            levels, batches, defaultHours,
+            batches, defaultHours,
             roster: [],
             crossBatchEntries: [],
-            selectedLevel: "",
             selectedBatch: "",
             selectedDate: "",
             highlightStudentId: ""
@@ -202,21 +200,33 @@ router.get("/load", (req, res) => {
     const schoolId = req.schoolId;
 
     Promise.all([
-        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
         dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
-        // Home roster: everyone actually assigned to this batch.
-        dbAll("SELECT * FROM students WHERE batch_id=? AND school_id=? ORDER BY name", [batch_id, schoolId]),
+        // Home roster: everyone actually assigned to this batch - a batch
+        // can include students from different Levels, so each student's
+        // own Level is looked up here (rather than assumed from the
+        // batch) and shown in the roster.
+        dbAll(
+            `SELECT students.*, level.name AS level_name
+             FROM students
+             LEFT JOIN lookup_items level ON students.level_id = level.id
+             WHERE students.batch_id=? AND students.school_id=?
+             ORDER BY students.name`,
+            [batch_id, schoolId]
+        ),
         // Every attendance row already saved for THIS batch+date, if any
         // (re-visiting an already-marked session) - covers both home-roster
         // members and any previously-added cross-batch visitors.
         dbAll(
-            `SELECT attendance.*, students.name AS student_name, students.admission_no, students.photo_path
-             FROM attendance JOIN students ON attendance.student_id = students.id
+            `SELECT attendance.*, students.name AS student_name, students.admission_no, students.photo_path,
+                    level.name AS level_name
+             FROM attendance
+             JOIN students ON attendance.student_id = students.id
+             LEFT JOIN lookup_items level ON students.level_id = level.id
              WHERE attendance.batch_id=? AND attendance.attendance_date=? AND attendance.school_id=?`,
             [batch_id, attendance_date, schoolId]
         ),
         getDefaultHoursAttended(schoolId)
-    ]).then(([levels, batches, homeRoster, existingRecords, defaultHours]) => {
+    ]).then(([batches, homeRoster, existingRecords, defaultHours]) => {
 
         const presentIds = new Set(
             existingRecords.filter(r => r.status === "Present" && !r.is_different_batch).map(r => r.student_id)
@@ -228,11 +238,10 @@ router.get("/load", (req, res) => {
 
         const crossBatchEntries = existingRecords
             .filter(r => r.is_different_batch)
-            .map(r => ({ id: r.student_id, name: r.student_name, admission_no: r.admission_no, photo_path: r.photo_path, hours: r.hours_attended != null ? r.hours_attended : defaultHours }));
+            .map(r => ({ id: r.student_id, name: r.student_name, admission_no: r.admission_no, photo_path: r.photo_path, level_name: r.level_name, hours: r.hours_attended != null ? r.hours_attended : defaultHours }));
 
         res.render("attendance", {
-            levels, batches, roster, crossBatchEntries, defaultHours,
-            selectedLevel: req.query.level_id || "",
+            batches, roster, crossBatchEntries, defaultHours,
             selectedBatch: batch_id || "",
             selectedDate: attendance_date || "",
             highlightStudentId: req.query.highlight_student_id || ""

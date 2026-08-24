@@ -18,18 +18,12 @@
                         <div class="d-flex gap-2">
                             <input type="text" name="name" class="form-control" placeholder="Add new <%= listTypes[type].toLowerCase() %> entry" required>
                             <% if (type === 'batch') { %>
-                                <select name="level_id" class="form-select" style="max-width:160px">
-                                    <option value="">No Level</option>
-                                    <% levels.forEach(function(l) { %>
-                                        <option value="<%= l.id %>"><%= l.name %></option>
-                                    <% }) %>
-                                </select>
                                 <input type="number" name="sessions_per_week" class="form-control" placeholder="Sessions/wk" style="max-width:130px">
                             <% } %>
                             <button class="btn btn-success">Add</button>
                         </div>
                         <% if (type === 'batch') { %>
-                            <small class="text-muted d-block mb-2">Which Level this batch belongs to, plus Sessions/week for working out expected classes per month.</small>
+                            <small class="text-muted d-block mb-2">Sessions/week is used for working out expected classes per month. A batch can include students from different Levels - Level isn't set here.</small>
                             <div class="d-flex flex-wrap gap-2">
                                 <% const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]; %>
                                 <span class="small text-muted me-1">Default Days:</span>
@@ -52,10 +46,6 @@
                                     <span>
                                         <%= item.name %>
                                         <% if (type === 'batch') { %>
-                                            <% const linkedLevel = levels.find(l => l.id === item.level_id); %>
-                                            <% if (linkedLevel) { %>
-                                                <span class="badge bg-primary"><%= linkedLevel.name %></span>
-                                            <% } %>
                                             <% if (item.sessions_per_week) { %>
                                                 <span class="badge bg-info text-dark"><%= item.sessions_per_week %>/week &middot; ~<%= item.sessions_per_week * 4 %>/month</span>
                                             <% } %>

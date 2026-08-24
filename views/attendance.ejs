@@ -20,37 +20,27 @@
         </div>
     </div>
 
-    <!-- Select Level, Batch & Date -->
+    <!-- Select Batch & Date -->
     <form action="/attendance/load" method="GET" id="loadForm">
         <div class="row mb-4">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">Attendance Date</label>
                 <input type="date" name="attendance_date" id="attendanceDateInput" class="form-control" value="<%= selectedDate %>" required>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Level</label>
-                <select id="levelFilter" class="form-select">
-                    <option value="">All Levels</option>
-                    <% levels.forEach(function(l) { %>
-                        <option value="<%= l.id %>" <%= String(selectedLevel)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
-                    <% }) %>
-                </select>
-                <small class="text-muted">Narrows the Batch list below.</small>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">Batch</label>
                 <select name="batch_id" id="batchSelect" class="form-select" required>
                     <option value="">Select Batch</option>
                     <% batches.forEach(function(b) { %>
-                        <option value="<%= b.id %>" data-level="<%= b.level_id || '' %>" <%= String(selectedBatch)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+                        <option value="<%= b.id %>" <%= String(selectedBatch)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
                     <% }) %>
                 </select>
+                <small class="text-muted">A batch can include students from different Levels - each student's Level is shown in the roster below.</small>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
+            <div class="col-md-4 d-flex align-items-end">
                 <button class="btn btn-primary w-100">Load Students</button>
             </div>
         </div>
-        <input type="hidden" name="level_id" id="levelIdHidden" value="<%= selectedLevel %>">
     </form>
 
     <% if (roster.length > 0 || crossBatchEntries.length > 0) { %>
@@ -66,6 +56,7 @@
                     <th width="60">Photo</th>
                     <th width="120">Roll No.</th>
                     <th>Student Name</th>
+                    <th width="110">Level</th>
                     <th width="100">Batch</th>
                     <th width="120">Present</th>
                     <th width="140">Hours Attended</th>
@@ -83,6 +74,7 @@
                         </td>
                         <td><%= student.admission_no || "-" %></td>
                         <td><%= student.name %></td>
+                        <td><%= student.level_name || "-" %></td>
                         <td><span class="badge bg-secondary">Home</span></td>
                         <td class="text-center">
                             <input type="checkbox" name="student" value="<%= student.id %>" class="present-checkbox"
@@ -105,6 +97,7 @@
                         </td>
                         <td><%= entry.admission_no || "-" %></td>
                         <td><%= entry.name %></td>
+                        <td><%= entry.level_name || "-" %></td>
                         <td><span class="badge bg-warning text-dark">Different Batch</span></td>
                         <td class="text-center">
                             <input type="checkbox" checked disabled>
@@ -157,27 +150,6 @@
 // School-configurable default (see Settings > Attendance).
 const DEFAULT_HOURS_ATTENDED = <%= defaultHours %>;
 
-// Level filter narrows the Batch dropdown to just that level's batches.
-const levelFilter = document.getElementById('levelFilter');
-const batchSelect = document.getElementById('batchSelect');
-const levelIdHidden = document.getElementById('levelIdHidden');
-const allBatchOptions = Array.from(batchSelect.options);
-
-function applyLevelFilter() {
-    const levelId = levelFilter.value;
-    levelIdHidden.value = levelId;
-    batchSelect.innerHTML = '';
-    batchSelect.appendChild(new Option('Select Batch', ''));
-    allBatchOptions.forEach(opt => {
-        if (!opt.value) return; // skip the placeholder we already re-added
-        if (!levelId || opt.dataset.level === levelId) {
-            batchSelect.appendChild(opt.cloneNode(true));
-        }
-    });
-}
-levelFilter.addEventListener('change', applyLevelFilter);
-if (levelFilter.value) applyLevelFilter();
-
 // Smart Student Search - the main new entry point: find a student by
 // Roll No./Name without needing to already know their Batch, see their
 // photo/Batch/Level at a glance, and jump straight to their roster with
@@ -206,7 +178,7 @@ if (smartSearch) {
                 const levelBadge = s.level_name ? `<span class="badge bg-primary">${s.level_name}</span>` : '';
                 return `
                     <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3"
-                        onclick="jumpToStudent(${s.id}, ${s.batch_id || 'null'}, ${s.level_id || 'null'})">
+                        onclick="jumpToStudent(${s.id}, ${s.batch_id || 'null'})">
                         ${photo}
                         <span class="flex-grow-1">
                             <div><strong>${s.name}</strong> ${s.admission_no ? '(' + s.admission_no + ')' : ''}</div>
@@ -219,7 +191,7 @@ if (smartSearch) {
     });
 }
 
-function jumpToStudent(studentId, batchId, levelId) {
+function jumpToStudent(studentId, batchId) {
     if (!batchId) {
         alert('This student has no Batch assigned yet - set one from their Edit Student page first.');
         return;
@@ -230,7 +202,6 @@ function jumpToStudent(studentId, batchId, levelId) {
         attendance_date: date,
         highlight_student_id: studentId
     });
-    if (levelId) params.set('level_id', levelId);
     window.location.href = '/attendance/load?' + params.toString();
 }
 

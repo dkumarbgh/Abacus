@@ -40,7 +40,7 @@ router.get("/", requireRole("Admin"), (req, res) => {
 ========================================== */
 router.post("/add", requireRole("Admin"), (req, res) => {
 
-    const { list_type, name, sessions_per_week, level_id, digit_count, operand_count, problem_count, include_subtraction, default_days } = req.body;
+    const { list_type, name, sessions_per_week, digit_count, operand_count, problem_count, include_subtraction, default_days } = req.body;
 
     if (!LIST_TYPES[list_type] || !name || !name.trim()) {
         return res.redirect("/lists");
@@ -56,12 +56,11 @@ router.post("/add", requireRole("Admin"), (req, res) => {
 
     db.run(
         `INSERT INTO lookup_items
-         (school_id, list_type, name, sessions_per_week, level_id, digit_count, operand_count, problem_count, include_subtraction, default_days)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+         (school_id, list_type, name, sessions_per_week, digit_count, operand_count, problem_count, include_subtraction, default_days)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
         [
             req.schoolId, list_type, name.trim(),
             list_type === "batch" ? (parseInt(sessions_per_week) || null) : null,
-            list_type === "batch" ? (parseInt(level_id) || null) : null,
             list_type === "level" ? (parseInt(digit_count) || null) : null,
             list_type === "level" ? (parseInt(operand_count) || null) : null,
             list_type === "level" ? (parseInt(problem_count) || null) : null,
@@ -87,15 +86,8 @@ router.get("/edit/:id", requireRole("Admin"), (req, res) => {
         (err, item) => {
             if (err) return res.send(err.message);
             if (!item) return res.send("Not found");
-            db.all(
-                "SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name",
-                [req.schoolId],
-                (err2, levels) => {
-                    if (err2) return res.send(err2.message);
-                    const defaultDays = (item.default_days || "").split(",").filter(d => d !== "").map(Number);
-                    res.render("editListItem", { item, listTypes: LIST_TYPES, levels, defaultDays });
-                }
-            );
+            const defaultDays = (item.default_days || "").split(",").filter(d => d !== "").map(Number);
+            res.render("editListItem", { item, listTypes: LIST_TYPES, defaultDays });
         }
     );
 
@@ -103,7 +95,7 @@ router.get("/edit/:id", requireRole("Admin"), (req, res) => {
 
 router.post("/edit/:id", requireRole("Admin"), (req, res) => {
 
-    const { name, sessions_per_week, level_id, digit_count, operand_count, problem_count, include_subtraction, default_days } = req.body;
+    const { name, sessions_per_week, digit_count, operand_count, problem_count, include_subtraction, default_days } = req.body;
 
     db.get(
         "SELECT list_type FROM lookup_items WHERE id=? AND school_id=?",
@@ -119,12 +111,11 @@ router.post("/edit/:id", requireRole("Admin"), (req, res) => {
 
             db.run(
                 `UPDATE lookup_items
-                 SET name=?, sessions_per_week=?, level_id=?, digit_count=?, operand_count=?, problem_count=?, include_subtraction=?, default_days=?
+                 SET name=?, sessions_per_week=?, digit_count=?, operand_count=?, problem_count=?, include_subtraction=?, default_days=?
                  WHERE id=? AND school_id=?`,
                 [
                     name.trim(),
                     item.list_type === "batch" ? (parseInt(sessions_per_week) || null) : null,
-                    item.list_type === "batch" ? (parseInt(level_id) || null) : null,
                     item.list_type === "level" ? (parseInt(digit_count) || null) : null,
                     item.list_type === "level" ? (parseInt(operand_count) || null) : null,
                     item.list_type === "level" ? (parseInt(problem_count) || null) : null,
@@ -178,9 +169,9 @@ router.get("/batches/:id", requireRole("Admin"), (req, res) => {
             if (!batch) return res.send("Batch not found");
 
             db.all(
-                `SELECT students.id, students.name, students.admission_no, classes.class_name
+                `SELECT students.id, students.name, students.admission_no, level.name AS level_name
                  FROM students
-                 LEFT JOIN classes ON students.class_id = classes.id
+                 LEFT JOIN lookup_items level ON students.level_id = level.id
                  WHERE students.batch_id = ? AND students.school_id = ?
                  ORDER BY students.name`,
                 [batchId, schoolId],
