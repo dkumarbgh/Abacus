@@ -1,0 +1,38 @@
+<% if (savedPapers.length === 0) { %>
+    <p class="text-muted">No papers generated yet - use the form above to create your first one.</p>
+<% } else { %>
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr><th>Level</th><th>Source</th><th>Paper Date</th><th>Problems</th><th>Generated/Uploaded On</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            <% savedPapers.forEach(function(p) { %>
+                <tr>
+                    <td><%= p.level_name %></td>
+                    <td>
+                        <% if (p.source === 'uploaded') { %>
+                            <span class="badge bg-secondary">Uploaded</span>
+                        <% } else { %>
+                            <span class="badge bg-primary">Generated</span>
+                        <% } %>
+                    </td>
+                    <td><%= p.paper_date %></td>
+                    <td>
+                        <% if (p.source === 'uploaded') { %>
+                            -
+                        <% } else { %>
+                            <%= p.problem_count %> (<%= p.digit_count %>-digit, <%= p.operand_count %>/problem<%= p.include_subtraction ? ', +/-' : '' %>)
+                        <% } %>
+                    </td>
+                    <td><%= p.created_at %></td>
+                    <td>
+                        <a href="/test-papers/<%= p.id %>/view" class="btn btn-sm btn-outline-primary" target="_blank">👁 View</a>
+                        <a href="/test-papers/<%= p.id %>/send" class="btn btn-sm btn-success">📤 Send</a>
+                        <a href="/test-papers/<%= p.id %>/delete" class="btn btn-sm btn-outline-danger"
+                           onclick="return confirm('Delete this saved paper? This cannot be undone.')">Delete</a>
+                    </td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+<% } %>

@@ -1,0 +1,124 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>📊 Attendance Detail Report</h2>
+<p class="text-muted">
+    Month-by-month, per student: how many classes were expected vs. actually attended, broken down by
+    whether the attendance was in the student's own batch or a different one (makeup/visiting sessions).
+</p>
+
+<div class="d-flex justify-content-end mb-2">
+    <a class="btn btn-success btn-sm"
+       href="/reports/attendance-detail/excel?class_id=<%= classId %>&batch_id=<%= batchId %>&level_id=<%= levelId %>&student_name=<%= encodeURIComponent(studentName) %>&months=<%= numMonths %>">
+        📥 Export to Excel
+    </a>
+</div>
+
+<form method="GET" action="/reports/attendance-detail" class="row g-2 mb-4">
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Class</label>
+        <select name="class_id" class="form-select">
+            <option value="">All Classes</option>
+            <% classes.forEach(function(c) { %>
+                <option value="<%= c.id %>" <%= String(classId)===String(c.id) ? "selected" : "" %>><%= c.class_name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Batch</label>
+        <select name="batch_id" class="form-select">
+            <option value="">All Batches</option>
+            <% batches.forEach(function(b) { %>
+                <option value="<%= b.id %>" <%= String(batchId)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Level</label>
+        <select name="level_id" class="form-select">
+            <option value="">All Levels</option>
+            <% levels.forEach(function(l) { %>
+                <option value="<%= l.id %>" <%= String(levelId)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Student Name / Roll No.</label>
+        <input type="text" name="student_name" class="form-control" placeholder="Search..." value="<%= studentName %>">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Months to Show</label>
+        <select name="months" class="form-select">
+            <% [1,3,6,12].forEach(function(n) { %>
+                <option value="<%= n %>" <%= numMonths===n ? "selected" : "" %>><%= n %> month<%= n===1?'':'s' %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-1 d-flex align-items-end">
+        <button class="btn btn-primary w-100">Go</button>
+    </div>
+</form>
+
+<% if (rows.length === 0) { %>
+    <div class="alert alert-info">No students match these filters, or none have a batch with sessions/week set (needed to calculate expected classes).</div>
+<% } else { %>
+
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Student</th>
+                <th>Batch</th>
+                <th>Month</th>
+                <th>Expected</th>
+                <th>Attended (Own Batch)</th>
+                <th>Attended (Different Batch)</th>
+                <th>Total Attended</th>
+                <th>%</th>
+                <th>Status</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% rows.forEach(function(r) { %>
+                <tr class="<%= r.status === 'Irregular' ? 'table-danger' : '' %>">
+                    <td><a href="/reports/student/<%= r.studentId %>"><%= r.studentName %></a><%= r.admissionNo ? ' (' + r.admissionNo + ')' : '' %></td>
+                    <td><%= r.batchName || '-' %></td>
+                    <td>
+                        <%= r.month %>
+                        <% if (r.isCurrentMonth) { %>
+                            <span class="badge bg-info text-dark">In progress</span>
+                        <% } %>
+                    </td>
+                    <td><%= r.expected == null ? '-' : r.expected %></td>
+                    <td><%= r.expected == null ? '-' : r.homeAttended %></td>
+                    <td>
+                        <% if (r.differentAttended > 0) { %>
+                            <span class="badge bg-warning text-dark"><%= r.differentAttended %></span>
+                        <% } else { %>
+                            0
+                        <% } %>
+                    </td>
+                    <td><b><%= r.expected == null ? '-' : r.totalAttended %></b></td>
+                    <td><%= r.pct == null ? '-' : r.pct + '%' %></td>
+                    <td>
+                        <% if (r.status === 'Regular') { %>
+                            <span class="badge bg-success">Regular</span>
+                        <% } else if (r.status === 'Irregular') { %>
+                            <span class="badge bg-danger">Irregular</span>
+                        <% } else { %>
+                            <span class="badge bg-secondary">No batch / not set</span>
+                        <% } %>
+                    </td>
+                    <td>
+                        <a href="/reports/attendance-detail/<%= r.studentId %>/days?month=<%= r.month %>" class="btn btn-sm btn-outline-primary">Day-wise</a>
+                    </td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+
+<% } %>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

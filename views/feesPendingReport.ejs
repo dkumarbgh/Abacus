@@ -1,0 +1,75 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Fees Pending Report
+    <% if (simpleFeeMode) { %><span class="badge bg-warning text-dark align-middle">Simple Fee Mode: amounts hidden</span><% } %>
+</h2>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <form method="GET" action="/reports/fees-pending">
+            <select name="batch_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Batches</option>
+                <% batches.forEach(b => { %>
+                    <option value="<%= b.id %>" <%= String(batch_id)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="level_id" value="<%= level_id %>">
+        </form>
+    </div>
+    <div class="col-md-4">
+        <form method="GET" action="/reports/fees-pending">
+            <select name="level_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Levels</option>
+                <% levels.forEach(l => { %>
+                    <option value="<%= l.id %>" <%= String(level_id)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="batch_id" value="<%= batch_id %>">
+        </form>
+    </div>
+    <div class="col-md-4 text-end">
+        <form method="POST" action="/reports/fees-pending/remind" onsubmit="return confirm('Send a WhatsApp reminder to every guardian listed below?')">
+            <input type="hidden" name="batch_id" value="<%= batch_id %>">
+            <input type="hidden" name="level_id" value="<%= level_id %>">
+            <button class="btn btn-warning" <%= pending.length===0 ? "disabled" : "" %>>
+                📲 Send WhatsApp Reminder to All Below (<%= pending.length %>)
+            </button>
+        </form>
+    </div>
+</div>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>Student</th><th>Batch</th><th>Level</th><th>Guardian Phone</th>
+            <th><%= simpleFeeMode ? "Status" : "Total Due" %></th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (pending.length === 0) { %>
+            <tr><td colspan="5" class="text-center">No pending fees 🎉</td></tr>
+        <% } %>
+        <% pending.forEach(r => { %>
+            <% const lvl = levels.find(l => String(l.id)===String(r.student.level_id)); %>
+            <% const bat = batches.find(b => String(b.id)===String(r.student.batch_id)); %>
+            <tr>
+                <td><a href="/reports/student/<%= r.student.id %>"><%= r.student.name %></a></td>
+                <td><%= bat ? bat.name : "-" %></td>
+                <td><%= lvl ? lvl.name : "-" %></td>
+                <td><%= r.student.guardian_phone || "-" %></td>
+                <td>
+                    <% if (simpleFeeMode) { %>
+                        <span class="badge bg-danger">Pending</span>
+                    <% } else { %>
+                        <b>₹<%= r.totalDue %></b>
+                    <% } %>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

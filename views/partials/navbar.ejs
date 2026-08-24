@@ -1,0 +1,147 @@
+<% if (typeof impersonating !== 'undefined' && impersonating) { %>
+<div class="alert alert-warning rounded-0 mb-0 py-2 text-center">
+    🛡️ You're viewing <strong><%= currentUser.schoolName %></strong> as a Super Admin.
+    <a href="/exit-impersonation" class="btn btn-sm btn-dark ms-2">Exit to Super Admin</a>
+</div>
+<% } %>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+
+    <div class="container-fluid px-3">
+
+        <a class="navbar-brand fw-bold" href="/">
+            🏫 Abacas Kuvempunagar
+        </a>
+
+        <button
+            class="navbar-toggler"
+            data-bs-toggle="collapse"
+            data-bs-target="#menu">
+
+            <span class="navbar-toggler-icon"></span>
+
+        </button>
+
+        <div
+            class="collapse navbar-collapse"
+            id="menu">
+
+            <ul class="navbar-nav me-auto">
+
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                </li>
+
+                <!-- Academics: students, levels, teachers, subjects, timetable -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        🎓 Academics
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/students">👨‍🎓 Students</a></li>
+                        <li><a class="dropdown-item" href="/lists#list-level">🎯 Levels</a></li>
+                        <li><a class="dropdown-item" href="/teachers">👩‍🏫 Teachers</a></li>
+                        <li><a class="dropdown-item" href="/subjects">📚 Subjects</a></li>
+                        <li><a class="dropdown-item" href="/assignments">📖 Assign Subjects</a></li>
+                        <li><a class="dropdown-item" href="/timetable">📅 Timetable</a></li>
+                    </ul>
+                </li>
+
+                <!-- Attendance: manual + history (face-recognition attendance is mobile-app only) -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        📅 Attendance
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/attendance">✅ Mark Attendance</a></li>
+                        <li><a class="dropdown-item" href="/attendance/history">📋 Attendance History</a></li>
+                    </ul>
+                </li>
+
+                <!-- Fees: categories, structure, collection -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        💰 Fees
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/fees">🧾 Fee Categories</a></li>
+                        <li><a class="dropdown-item" href="/fee-structure">📐 Fee Structure</a></li>
+                        <li><a class="dropdown-item" href="/fee-payments">💵 Collect Fees</a></li>
+                    </ul>
+                </li>
+
+                <!-- Exams: exam creation/marks + practice sheets -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        📝 Exams
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/exams">📝 Exams &amp; Marks</a></li>
+                        <li><a class="dropdown-item" href="/practice-sheets">📄 Practice Sheets</a></li>
+                        <li><a class="dropdown-item" href="/certificates/templates">📜 Certificates</a></li>
+                        <li><a class="dropdown-item" href="/level-promotion">🎓 Promote Level</a></li>
+                        <li><a class="dropdown-item" href="/test-papers">🧮 Test Papers</a></li>
+                        <li><a class="dropdown-item" href="/leads">🎯 Referral Leads</a></li>
+                    </ul>
+                </li>
+
+                <% if (features.whatsapp) { %>
+                <li class="nav-item">
+                    <a class="nav-link" href="/whatsapp">
+                        💬 WhatsApp
+                    </a>
+                </li>
+                <% } %>
+
+                <li class="nav-item">
+                    <a class="nav-link" href="/reports">
+                        📈 Reports
+                    </a>
+                </li>
+
+            </ul>
+
+            <ul class="navbar-nav">
+
+                <% if (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'Admin') { %>
+                <li class="nav-item">
+                    <a class="nav-link" href="/users">
+                        👤 Users
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/settings">
+                        ⚙️ Settings
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/lists">
+                        📋 Courses/Batches
+                    </a>
+                </li>
+                <% } %>
+
+                <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white-50" href="#" data-bs-toggle="dropdown">
+                        <%= currentUser.name %> (<%= currentUser.role %>)
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header"><%= currentUser.schoolName %></h6></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout">🚪 Logout</a></li>
+                    </ul>
+                </li>
+                <% } %>
+
+            </ul>
+
+        </div>
+
+    </div>
+
+</nav>
+
+<div class="container mt-4">

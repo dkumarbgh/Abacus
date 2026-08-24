@@ -1,0 +1,101 @@
+<%- include("../partials/header") %>
+<%- include("../partials/superAdminNav") %>
+
+<h2>Referral Programme</h2>
+<p class="text-muted">
+    Every referral recorded across every school. Staff record these on the Student Add form
+    ("Referred By"); rewards are only applied here, after review - never automatically.
+</p>
+
+<% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+<% } %>
+
+<% if (referrals.length > 0) { %>
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold"><%= referrals.length %></div>
+                    <div class="text-muted small">Total Referrals</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold"><%= referrals.filter(r => r.reward_applied).length %></div>
+                    <div class="text-muted small">Rewards Applied</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold"><%= referrals.filter(r => !r.reward_applied).length %></div>
+                    <div class="text-muted small">Pending</div>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>School</th>
+            <th>Referred By</th>
+            <th>New Student</th>
+            <th>Reward</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (referrals.length === 0) { %>
+            <tr><td colspan="7" class="text-center">No referrals recorded yet.</td></tr>
+        <% } %>
+        <% referrals.forEach(function(r) { %>
+            <tr>
+                <td><%= r.school_name %></td>
+                <td><%= r.referring_student_name %></td>
+                <td>
+                    <%= r.referred_student_name || r.lead_name || '-' %>
+                    <% if (!r.referred_student_name && r.lead_name) { %>
+                        <span class="badge bg-secondary">Lead - not yet enrolled</span>
+                    <% } %>
+                </td>
+                <td>
+                    <% if (r.reward_type === 'PERCENT') { %>
+                        <%= r.reward_value %>%
+                    <% } else if (r.reward_type === 'PRIZE') { %>
+                        🎁 <%= r.prize_description %>
+                    <% } else { %>
+                        ₹<%= r.reward_value %>
+                    <% } %>
+                </td>
+                <td>
+                    <% if (r.reward_applied) { %>
+                        <span class="badge bg-success">Applied</span>
+                    <% } else { %>
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    <% } %>
+                </td>
+                <td><%= r.created_at %></td>
+                <td>
+                    <% if (!r.reward_applied) { %>
+                        <form action="/super-admin/referrals/<%= r.id %>/apply-reward" method="POST" class="d-inline"
+                              onclick="return confirm('Confirm this reward has been given to <%= r.referring_student_name %>?')">
+                            <button class="btn btn-sm btn-success" type="submit">Apply Reward</button>
+                        </form>
+                    <% } else { %>
+                        <span class="text-muted small">&mdash;</span>
+                    <% } %>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<%- include("../partials/footer") %>

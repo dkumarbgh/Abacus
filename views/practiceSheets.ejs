@@ -1,0 +1,95 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row">
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h4>Upload Practice Sheet</h4></div>
+            <div class="card-body">
+                <form action="/practice-sheets/upload" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <input type="text" name="title" class="form-control" placeholder="e.g. Fractions Worksheet 1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Class</label>
+                        <select name="class_id" class="form-select" required>
+                            <% classes.forEach(c=>{ %>
+                                <option value="<%= c.id %>"><%= c.class_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        <select name="subject_id" class="form-select" required>
+                            <% subjects.forEach(s=>{ %>
+                                <option value="<%= s.id %>"><%= s.subject_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">File (PDF recommended)</label>
+                        <input type="file" name="file" class="form-control" required>
+                    </div>
+                    <button class="btn btn-success w-100">Upload</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white"><h4>Practice Sheets</h4></div>
+            <div class="card-body">
+
+                <form method="GET" action="/practice-sheets" class="row g-2 mb-3">
+                    <div class="col-md-5">
+                        <select name="class_id" class="form-select" onchange="this.form.submit()">
+                            <option value="">All Classes</option>
+                            <% classes.forEach(c=>{ %>
+                                <option value="<%= c.id %>" <%= class_id==c.id ? "selected" : "" %>><%= c.class_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <select name="subject_id" class="form-select" onchange="this.form.submit()">
+                            <option value="">All Subjects</option>
+                            <% subjects.forEach(s=>{ %>
+                                <option value="<%= s.id %>" <%= subject_id==s.id ? "selected" : "" %>><%= s.subject_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </form>
+
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr><th>Title</th><th>Class</th><th>Subject</th><th>Uploaded</th><th width="160">Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <% if (sheets.length === 0) { %>
+                            <tr><td colspan="5" class="text-center">No practice sheets uploaded yet</td></tr>
+                        <% } %>
+                        <% sheets.forEach(s => { %>
+                            <tr>
+                                <td><%= s.title %></td>
+                                <td><%= s.class_name %></td>
+                                <td><%= s.subject_name %></td>
+                                <td><%= new Date(s.uploaded_at).toLocaleDateString() %></td>
+                                <td>
+                                    <a href="<%= s.file_path %>" target="_blank" class="btn btn-outline-primary btn-sm">⬇ Download</a>
+                                    <a href="/practice-sheets/<%= s.id %>/send" class="btn btn-outline-success btn-sm">📤 Send</a>
+                                    <a href="/practice-sheets/delete/<%= s.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this sheet?')">Delete</a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

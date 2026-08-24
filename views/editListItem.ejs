@@ -1,0 +1,77 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-warning">
+                <h4>Edit <%= listTypes[item.list_type] %> Entry</h4>
+            </div>
+            <div class="card-body">
+                <form action="/lists/edit/<%= item.id %>" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" value="<%= item.name %>" required>
+                    </div>
+                    <% if (item.list_type === 'batch') { %>
+                        <div class="mb-3">
+                            <label class="form-label">Level</label>
+                            <select name="level_id" class="form-select">
+                                <option value="">No Level</option>
+                                <% levels.forEach(function(l) { %>
+                                    <option value="<%= l.id %>" <%= item.level_id === l.id ? "selected" : "" %>><%= l.name %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Sessions per Week</label>
+                            <input type="number" name="sessions_per_week" class="form-control" value="<%= item.sessions_per_week || '' %>">
+                            <small class="text-muted">Used to work out each student's expected classes per month (roughly &times;4).</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label d-block">Default Days</label>
+                            <small class="text-muted d-block mb-1">Auto-fills the Weekly Attendance Schedule on the Student form when this batch is picked (student can still override).</small>
+                            <div class="d-flex flex-wrap gap-3">
+                                <% const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]; %>
+                                <% dayNames.forEach(function(day, idx) { %>
+                                    <div class="form-check">
+                                        <input type="checkbox" name="default_days" value="<%= idx %>" id="editBatchDay<%= idx %>" class="form-check-input"
+                                            <%= defaultDays.includes(idx) ? "checked" : "" %>>
+                                        <label class="form-check-label" for="editBatchDay<%= idx %>"><%= day %></label>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </div>
+                    <% } %>
+                    <% if (item.list_type === 'level') { %>
+                        <hr>
+                        <h6 class="text-muted">Abacus Test Paper Defaults</h6>
+                        <p class="small text-muted">Used when generating a randomized practice/test paper for this level.</p>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small">Digits per Number</label>
+                                <input type="number" name="digit_count" class="form-control" value="<%= item.digit_count || '' %>" placeholder="e.g. 2">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small">Numbers per Problem</label>
+                                <input type="number" name="operand_count" class="form-control" value="<%= item.operand_count || '' %>" placeholder="e.g. 5">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small">Problems per Paper</label>
+                                <input type="number" name="problem_count" class="form-control" value="<%= item.problem_count || '' %>" placeholder="e.g. 20">
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" name="include_subtraction" id="incSub" class="form-check-input" <%= item.include_subtraction ? "checked" : "" %>>
+                            <label class="form-check-label small" for="incSub">Mix in subtraction (not just addition)</label>
+                        </div>
+                    <% } %>
+                    <button class="btn btn-primary">Save Changes</button>
+                    <a href="/lists" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("partials/footer") %>

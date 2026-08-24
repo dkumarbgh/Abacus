@@ -1,0 +1,59 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to Report</a>
+
+<h2>Day-wise Attendance: <%= student.name %></h2>
+<p class="text-muted">
+    <%= student.admission_no ? 'Roll No. ' + student.admission_no + ' · ' : '' %>
+    <%= student.class_name || '-' %> &middot; Month: <%= month %>
+</p>
+
+<% if (days.length === 0) { %>
+    <div class="alert alert-info">No attendance records for this student in <%= month %>.</div>
+<% } else { %>
+
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Batch</th>
+                <th>Hours Attended</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% days.forEach(function(d) { %>
+                <tr class="<%= d.status === 'Absent' ? 'table-danger' : (d.is_different_batch ? 'table-warning' : '') %>">
+                    <td><%= d.attendance_date %></td>
+                    <td>
+                        <% if (d.status === 'Present') { %>
+                            <span class="badge bg-success">Present</span>
+                        <% } else { %>
+                            <span class="badge bg-danger">Absent</span>
+                        <% } %>
+                    </td>
+                    <td>
+                        <%= d.batch_name || '-' %>
+                        <% if (d.is_different_batch) { %>
+                            <span class="badge bg-warning text-dark">Different Batch</span>
+                        <% } %>
+                    </td>
+                    <td><%= d.hours_attended != null ? d.hours_attended : '-' %></td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+
+    <% const presentCount = days.filter(d => d.status === 'Present').length; %>
+    <% const differentCount = days.filter(d => d.is_different_batch).length; %>
+    <p class="text-muted">
+        <%= presentCount %> present out of <%= days.length %> marked day(s) this month
+        <% if (differentCount > 0) { %>(including <%= differentCount %> in a different batch)<% } %>.
+    </p>
+
+<% } %>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

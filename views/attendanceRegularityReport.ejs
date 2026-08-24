@@ -1,0 +1,115 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>📆 Attendance Regularity Report</h2>
+<p class="text-muted">
+    Compares each student's attended classes against their own batch's expected count so far
+    (sessions/week &times; weeks elapsed). 75% or higher counts as Regular.
+</p>
+
+<% if (isCurrentMonth) { %>
+    <div class="alert alert-info py-2">
+        This month is still in progress (<%= daysElapsed %> day<%= daysElapsed===1?'':'s' %> elapsed so far) -
+        "Expected" below reflects classes up to today only, not the full month.
+    </div>
+<% } %>
+
+<form method="GET" action="/reports/attendance-regularity" class="row g-2 mb-4">
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Month</label>
+        <input type="month" name="month" class="form-control" value="<%= month %>">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Level</label>
+        <select name="level_id" class="form-select">
+            <option value="">All Levels</option>
+            <% levels.forEach(function(l) { %>
+                <option value="<%= l.id %>" <%= String(selectedLevel)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Batch</label>
+        <select name="batch_id" class="form-select">
+            <option value="">All Batches</option>
+            <% batches.forEach(function(b) { %>
+                <option value="<%= b.id %>" <%= String(selectedBatch)===String(b.id) ? "selected" : "" %>>
+                    <%= b.name %><%= b.sessions_per_week ? ' (' + b.sessions_per_week + '/week)' : '' %>
+                </option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Student Name</label>
+        <input type="text" name="student_name" class="form-control" placeholder="Search by name..." value="<%= studentName %>">
+    </div>
+    <div class="col-12">
+        <button class="btn btn-primary">Apply Filters</button>
+        <a href="/reports/attendance-regularity" class="btn btn-outline-secondary">Reset</a>
+    </div>
+</form>
+
+<% const regularCount = rows.filter(r => r.status === 'Regular').length; %>
+<% const irregularCount = rows.filter(r => r.status === 'Irregular').length; %>
+<% const unclassifiedCount = rows.filter(r => r.status === null).length; %>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold"><%= rows.length %></div>
+            <div class="text-muted small">Students Shown</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold text-success"><%= regularCount %></div>
+            <div class="text-muted small">Regular</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold text-danger"><%= irregularCount %></div>
+            <div class="text-muted small">Irregular</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold text-muted"><%= unclassifiedCount %></div>
+            <div class="text-muted small">No Batch Set</div>
+        </div></div>
+    </div>
+</div>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr><th>Student</th><th>Level</th><th>Batch</th><th>Attended</th><th>Expected</th><th>%</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+        <% if (rows.length === 0) { %>
+            <tr><td colspan="7" class="text-center">No students match these filters.</td></tr>
+        <% } %>
+        <% rows.forEach(function(r) { %>
+            <tr class="<%= r.status === 'Irregular' ? 'table-danger' : '' %>">
+                <td><a href="/reports/student/<%= r.id %>"><%= r.name %></a></td>
+                <td><%= r.level_name || '-' %></td>
+                <td><%= r.batch_name || '-' %></td>
+                <td><%= r.expected == null ? '-' : r.attended %></td>
+                <td><%= r.expected == null ? '-' : r.expected %></td>
+                <td><%= r.pct == null ? '-' : r.pct + '%' %></td>
+                <td>
+                    <% if (r.status === 'Regular') { %>
+                        <span class="badge bg-success">Regular</span>
+                    <% } else if (r.status === 'Irregular') { %>
+                        <span class="badge bg-danger">Irregular</span>
+                    <% } else { %>
+                        <span class="badge bg-secondary">No batch / not set</span>
+                    <% } %>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

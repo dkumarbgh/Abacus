@@ -1,0 +1,54 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/leads" class="btn btn-outline-secondary btn-sm mb-3">&larr; Leads</a>
+
+<h2>🎟 Redeem a Referral Coupon</h2>
+<p class="text-muted">Enter the code shown by the referring student's guardian to look up and confirm their reward.</p>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+
+        <div class="card shadow mb-3">
+            <div class="card-body">
+                <form action="/leads/redeem/lookup" method="POST" class="d-flex gap-2">
+                    <input type="text" name="coupon_code" class="form-control" placeholder="e.g. REF-A1B2C3" value="<%= searchedCode %>" style="text-transform:uppercase" required autofocus>
+                    <button class="btn btn-primary">Look Up</button>
+                </form>
+            </div>
+        </div>
+
+        <% if (error) { %>
+            <div class="alert alert-danger"><%= error %></div>
+        <% } %>
+
+        <% if (result) { %>
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white"><h5 class="mb-0">Coupon: <%= result.coupon_code %></h5></div>
+                <div class="card-body">
+                    <p><strong>Referred by:</strong> <%= result.referring_student_name %></p>
+                    <p><strong>Lead / Student:</strong> <%= result.referred_student_name || result.lead_name %></p>
+                    <p>
+                        <strong>Status:</strong>
+                        <% const statusColor = { New: 'secondary', Contacted: 'info', Enrolled: 'primary', Redeemed: 'success' }[result.status] || 'secondary'; %>
+                        <span class="badge bg-<%= statusColor %>"><%= result.status %></span>
+                    </p>
+                    <p><strong>Reward:</strong> <%= result.reward_type === 'PERCENT' ? result.reward_value + '%' : result.reward_type === 'PRIZE' ? result.prize_description : '₹' + result.reward_value %></p>
+
+                    <% if (result.reward_applied) { %>
+                        <div class="alert alert-success mb-0">
+                            ✅ Already redeemed<% if (result.redeemed_at) { %> on <%= result.redeemed_at %><% } %>.
+                        </div>
+                    <% } else { %>
+                        <form action="/leads/<%= result.id %>/redeem" method="POST" onclick="return confirm('Confirm this reward has been given to ' + '<%= result.referring_student_name %>\'?')">
+                            <button class="btn btn-success w-100">🎟 Confirm Redemption</button>
+                        </form>
+                    <% } %>
+                </div>
+            </div>
+        <% } %>
+
+    </div>
+</div>
+
+<%- include("partials/footer") %>

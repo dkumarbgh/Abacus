@@ -1,0 +1,108 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>📅 Attendance After Due Date</h2>
+<p class="text-muted">
+    Students whose Fee Due Date has already passed, and how many classes they've attended since then -
+    a quick view of who's still attending despite an overdue fee.
+</p>
+
+<form method="GET" action="/reports/attendance-after-due-date" class="row g-2 mb-4">
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Level</label>
+        <select name="level_id" class="form-select">
+            <option value="">All Levels</option>
+            <% levels.forEach(function(l) { %>
+                <option value="<%= l.id %>" <%= String(levelId)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Batch</label>
+        <select name="batch_id" class="form-select">
+            <option value="">All Batches</option>
+            <% batches.forEach(function(b) { %>
+                <option value="<%= b.id %>" <%= String(batchId)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-0">Student Name</label>
+        <input type="text" name="student_name" class="form-control" placeholder="Search by name..." value="<%= studentName %>">
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+        <button class="btn btn-primary me-2">Apply Filters</button>
+        <a href="/reports/attendance-after-due-date" class="btn btn-outline-secondary">Reset</a>
+    </div>
+</form>
+
+<% const withAttendance = rows.filter(r => r.attended_after_due > 0).length; %>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold"><%= rows.length %></div>
+            <div class="text-muted small">Students with an Overdue Fee</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold text-danger"><%= withAttendance %></div>
+            <div class="text-muted small">Attended At Least 1 Class Since</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="fs-3 fw-bold text-success"><%= rows.length - withAttendance %></div>
+            <div class="text-muted small">Haven't Attended Since Due Date</div>
+        </div></div>
+    </div>
+</div>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>Student</th><th>Level</th><th>Fee Due Date</th>
+            <th>Classes Attended After Due Date</th>
+            <th>Current Fee Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (rows.length === 0) { %>
+            <tr><td colspan="5" class="text-center">No students with a past-due Fee Due Date match these filters.</td></tr>
+        <% } %>
+        <% rows.forEach(function(r) { %>
+            <tr class="<%= r.attended_after_due > 0 ? 'table-warning' : '' %>">
+                <td><a href="/reports/student/<%= r.id %>"><%= r.name %></a></td>
+                <td><%= r.level_name || '-' %></td>
+                <td><%= r.fee_due_date %></td>
+                <td>
+                    <% if (r.attended_after_due > 0) { %>
+                        <span class="badge bg-danger"><%= r.attended_after_due %></span>
+                    <% } else { %>
+                        <span class="badge bg-success">0</span>
+                    <% } %>
+                </td>
+                <td>
+                    <% if (simpleFeeMode) { %>
+                        <% if (r.totalDue > 0) { %>
+                            <span class="badge bg-danger">Pending</span>
+                        <% } else { %>
+                            <span class="badge bg-success">Paid</span>
+                        <% } %>
+                    <% } else { %>
+                        <% if (r.totalDue > 0) { %>
+                            <b class="text-danger">₹<%= r.totalDue %></b>
+                        <% } else { %>
+                            <span class="badge bg-success">Paid</span>
+                        <% } %>
+                    <% } %>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

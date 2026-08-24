@@ -1,0 +1,63 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>🎯 Referral Leads</h2>
+    <div>
+        <a href="/leads/redeem/lookup" class="btn btn-outline-success">🎟 Redeem a Coupon</a>
+        <a href="/leads/new" class="btn btn-success">➕ New Lead</a>
+    </div>
+</div>
+
+<form method="GET" action="/leads" class="row g-2 mb-3">
+    <div class="col-md-3">
+        <select name="status" class="form-select" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <% ["New","Contacted","Enrolled","Redeemed"].forEach(function(s) { %>
+                <option value="<%= s %>" <%= status===s ? "selected" : "" %>><%= s %></option>
+            <% }) %>
+        </select>
+    </div>
+</form>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>Coupon Code</th>
+            <th>Referred By</th>
+            <th>Lead / Student</th>
+            <th>Contact</th>
+            <th>Status</th>
+            <th>Reward</th>
+            <th>Created</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (leads.length === 0) { %>
+            <tr><td colspan="8" class="text-center">No leads found.</td></tr>
+        <% } %>
+        <% leads.forEach(function(l) { %>
+            <tr>
+                <td><code><%= l.coupon_code || '-' %></code></td>
+                <td><%= l.referring_student_name %></td>
+                <td>
+                    <%= l.referred_student_name || l.lead_name %>
+                    <% if (!l.referred_student_name) { %><span class="badge bg-secondary">Not enrolled yet</span><% } %>
+                </td>
+                <td class="small">
+                    <%= l.lead_phone || '' %><% if (l.lead_phone && l.lead_email) { %><br><% } %><%= l.lead_email || '' %>
+                </td>
+                <td>
+                    <% const statusColor = { New: 'secondary', Contacted: 'info', Enrolled: 'primary', Redeemed: 'success' }[l.status] || 'secondary'; %>
+                    <span class="badge bg-<%= statusColor %>"><%= l.status %></span>
+                </td>
+                <td><%= l.reward_type === 'PERCENT' ? l.reward_value + '%' : l.reward_type === 'PRIZE' ? l.prize_description : '₹' + l.reward_value %></td>
+                <td class="small"><%= l.created_at %></td>
+                <td><a href="/leads/<%= l.id %>" class="btn btn-sm btn-outline-primary">View</a></td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<%- include("partials/footer") %>

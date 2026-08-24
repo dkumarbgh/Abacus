@@ -1,0 +1,123 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+<h2>📋 Attendance History</h2>
+
+<form method="GET" action="/attendance/history" class="row g-2 mb-3">
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Student Name</label>
+        <input type="text" name="student_name" class="form-control" placeholder="Name..." value="<%= studentName %>">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Roll Number</label>
+        <input type="text" name="roll_number" class="form-control" placeholder="Roll No..." value="<%= rollNumber %>">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Level</label>
+        <select name="level_id" class="form-select">
+            <option value="">All Levels</option>
+            <% levels.forEach(function(l) { %>
+                <option value="<%= l.id %>" <%= String(levelId)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Date (exact day)</label>
+        <input type="date" name="date" class="form-control" value="<%= date %>">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Month</label>
+        <input type="month" name="month" class="form-control" value="<%= month %>">
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-primary w-100">🔍 Search</button>
+    </div>
+</form>
+
+<p class="text-muted small">Tip: use either "Date" for a single day or "Month" for a whole month - if both are filled in, Date takes priority.</p>
+
+<hr>
+
+<table class="table table-bordered table-striped">
+
+<thead class="table-dark">
+
+<tr>
+
+<th>Date</th>
+
+<th>Student</th>
+
+<th>Roll No.</th>
+
+<th>Level</th>
+
+<th>Status</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<% if(attendance.length==0){ %>
+
+<tr>
+
+<td colspan="5" class="text-center">
+
+No attendance records found.
+
+</td>
+
+</tr>
+
+<% } %>
+
+<% attendance.forEach(function(a){ %>
+
+<tr>
+
+<td><%= a.attendance_date %></td>
+
+<td><%= a.name %></td>
+
+<td><%= a.admission_no || "-" %></td>
+
+<td><%= a.level_name || "-" %></td>
+
+<td>
+
+<% if(a.status=="Present"){ %>
+
+<span class="badge bg-success">
+
+Present
+
+</span>
+
+<% }else{ %>
+
+<span class="badge bg-danger">
+
+Absent
+
+</span>
+
+<% } %>
+
+</td>
+
+</tr>
+
+<% }) %>
+
+</tbody>
+
+</table>
+
+</div>
+
+<%- include("partials/footer") %>

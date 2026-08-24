@@ -1,0 +1,78 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Marks Entry &mdash; <%= exam.exam_name %> (<%= exam.level_name %>)</h2>
+
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="GET" action="/exams/marks/<%= exam.id %>" class="row g-2">
+            <div class="col-md-4">
+                <select name="subject_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">Select Subject</option>
+                    <% subjects.forEach(s => { %>
+                        <option value="<%= s.id %>" <%= (subject_id == s.id) ? "selected" : "" %>>
+                            <%= s.subject_name %>
+                        </option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="student_name" class="form-control" placeholder="Search by name..." value="<%= studentName %>">
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="roll_number" class="form-control" placeholder="Search by roll number..." value="<%= rollNumber %>">
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary w-100">🔍</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<% if (subject_id) { %>
+
+    <form action="/exams/marks/<%= exam.id %>" method="POST">
+        <input type="hidden" name="subject_id" value="<%= subject_id %>">
+
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Enter Marks</h5>
+                <div>
+                    <label class="me-2">Max Marks:</label>
+                    <input type="number" name="max_marks" value="<%= students[0] && students[0].max_marks ? students[0].max_marks : 100 %>" class="form-control d-inline-block" style="width:100px">
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <thead class="table-dark">
+                        <tr><th>Student</th><th>Roll No.</th><th width="200">Marks Obtained</th></tr>
+                    </thead>
+                    <tbody>
+                        <% if (students.length === 0) { %>
+                            <tr><td colspan="3" class="text-center">No students match this exam's Level and the current search.</td></tr>
+                        <% } %>
+                        <% students.forEach(s => { %>
+                            <tr>
+                                <td>
+                                    <%= s.name %>
+                                    <input type="hidden" name="student_id" value="<%= s.id %>">
+                                </td>
+                                <td><%= s.admission_no || "-" %></td>
+                                <td>
+                                    <input type="number" step="0.5" name="marks" class="form-control"
+                                           value="<%= s.marks_obtained !== null && s.marks_obtained !== undefined ? s.marks_obtained : '' %>">
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+                <button class="btn btn-success">Save Marks</button>
+            </div>
+        </div>
+    </form>
+
+<% } %>
+
+<a href="/exams" class="btn btn-link mt-3">&larr; Back to Exams</a>
+
+<%- include("partials/footer") %>

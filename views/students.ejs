@@ -1,0 +1,108 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Students</h2>
+
+<p>Total Students: <b><%= students.length %></b></p>
+
+<div class="row mb-3 g-2">
+    <div class="col-md-3">
+        <form method="GET" action="/students" class="d-flex">
+            <input type="text" name="search" class="form-control" placeholder="Search by name..." value="<%= search %>">
+            <input type="hidden" name="roll_number" value="<%= rollNumber %>">
+            <input type="hidden" name="batch_id" value="<%= batchId %>">
+            <input type="hidden" name="level_id" value="<%= levelId %>">
+            <button class="btn btn-primary ms-1">🔍</button>
+        </form>
+    </div>
+    <div class="col-md-3">
+        <form method="GET" action="/students" class="d-flex">
+            <input type="text" name="roll_number" class="form-control" placeholder="Search by roll number..." value="<%= rollNumber %>">
+            <input type="hidden" name="search" value="<%= search %>">
+            <input type="hidden" name="batch_id" value="<%= batchId %>">
+            <input type="hidden" name="level_id" value="<%= levelId %>">
+            <button class="btn btn-primary ms-1">🔍</button>
+        </form>
+    </div>
+    <div class="col-md-2">
+        <form method="GET" action="/students">
+            <select name="batch_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Batches</option>
+                <% batches.forEach(function(b) { %>
+                    <option value="<%= b.id %>" <%= String(batchId)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="search" value="<%= search %>">
+            <input type="hidden" name="roll_number" value="<%= rollNumber %>">
+            <input type="hidden" name="level_id" value="<%= levelId %>">
+        </form>
+    </div>
+    <div class="col-md-2">
+        <form method="GET" action="/students">
+            <select name="level_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Levels</option>
+                <% levels.forEach(function(l) { %>
+                    <option value="<%= l.id %>" <%= String(levelId)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="search" value="<%= search %>">
+            <input type="hidden" name="roll_number" value="<%= rollNumber %>">
+            <input type="hidden" name="batch_id" value="<%= batchId %>">
+        </form>
+    </div>
+    <div class="col-md-2 text-end">
+        <a href="/students/add" class="btn btn-success">➕ Register Student</a>
+        <a href="/students/import" class="btn btn-outline-secondary">⬆ Import</a>
+        <a href="/students/export" class="btn btn-outline-secondary">⬇ Export</a>
+    </div>
+</div>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>ID</th>
+            <th>Photo</th>
+            <th>Name</th>
+            <th>Roll No.</th>
+            <th>Level</th>
+            <th>Guardian Phone</th>
+            <th>Face Enrolled</th>
+            <th width="320">Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% students.forEach(function(student){ %>
+        <tr>
+            <td><%= student.id %></td>
+            <td>
+                <% if (student.photo_path) { %>
+                    <img src="<%= student.photo_path %>" width="40" height="40" style="object-fit:cover" class="rounded-circle border">
+                <% } else { %>
+                    <span class="text-muted">&mdash;</span>
+                <% } %>
+            </td>
+            <td><%= student.name %></td>
+            <td><%= student.admission_no || "-" %></td>
+            <td><%= student.level_name || "Not Assigned" %></td>
+            <td><%= student.guardian_phone || "-" %></td>
+            <td>
+                <% if (student.face_enrolled) { %>
+                    <span class="badge bg-success">Enrolled</span>
+                <% } else { %>
+                    <span class="badge bg-secondary">Not Enrolled</span>
+                <% } %>
+            </td>
+            <td>
+                <a href="/students/edit/<%= student.id %>" class="btn btn-warning btn-sm">✏ Edit</a>
+                <% if (features.faceRecognition) { %>
+                    <a href="/students/enroll-face/<%= student.id %>" class="btn btn-info btn-sm">📷 Face</a>
+                <% } %>
+                <a href="/reports/student/<%= student.id %>" class="btn btn-outline-primary btn-sm">📄 Report</a>
+                <a href="/students/delete/<%= student.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this student?')">Delete</a>
+            </td>
+        </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<%- include("partials/footer") %>

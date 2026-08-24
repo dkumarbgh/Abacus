@@ -1,0 +1,301 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+    <h2 class="mb-4">📅 Attendance Management</h2>
+
+    <% if (features.faceRecognition) { %>
+        <a href="/attendance/face-capture" class="btn btn-outline-primary mb-4">📷 Mark Attendance via Laptop Camera</a>
+    <% } %>
+
+    <!-- Smart Student Search - find anyone instantly by Roll No./Name,
+         see their photo/Batch/Level at a glance, and jump straight to
+         their roster without needing to already know which batch they're in. -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <label class="form-label small mb-1">🔍 Find a Student (Roll No. or Name)</label>
+            <input type="text" id="smartSearch" class="form-control" placeholder="Start typing... e.g. a roll number or name" autocomplete="off">
+            <div id="smartSearchResults" class="list-group mt-2" style="max-height:320px; overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <!-- Select Level, Batch & Date -->
+    <form action="/attendance/load" method="GET" id="loadForm">
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <label class="form-label">Attendance Date</label>
+                <input type="date" name="attendance_date" id="attendanceDateInput" class="form-control" value="<%= selectedDate %>" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Level</label>
+                <select id="levelFilter" class="form-select">
+                    <option value="">All Levels</option>
+                    <% levels.forEach(function(l) { %>
+                        <option value="<%= l.id %>" <%= String(selectedLevel)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+                    <% }) %>
+                </select>
+                <small class="text-muted">Narrows the Batch list below.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Batch</label>
+                <select name="batch_id" id="batchSelect" class="form-select" required>
+                    <option value="">Select Batch</option>
+                    <% batches.forEach(function(b) { %>
+                        <option value="<%= b.id %>" data-level="<%= b.level_id || '' %>" <%= String(selectedBatch)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary w-100">Load Students</button>
+            </div>
+        </div>
+        <input type="hidden" name="level_id" id="levelIdHidden" value="<%= selectedLevel %>">
+    </form>
+
+    <% if (roster.length > 0 || crossBatchEntries.length > 0) { %>
+
+    <form action="/attendance/save" method="POST" id="attendanceForm">
+
+        <input type="hidden" name="attendance_date" value="<%= selectedDate %>">
+        <input type="hidden" name="batch_id" value="<%= selectedBatch %>">
+
+        <table class="table table-bordered table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th width="60">Photo</th>
+                    <th width="120">Roll No.</th>
+                    <th>Student Name</th>
+                    <th width="100">Batch</th>
+                    <th width="120">Present</th>
+                    <th width="140">Hours Attended</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% roster.forEach(function(student) { %>
+                    <tr id="student-row-<%= student.id %>">
+                        <td class="text-center">
+                            <% if (student.photo_path) { %>
+                                <img src="<%= student.photo_path %>" alt="" style="width:36px; height:36px; object-fit:cover; border-radius:50%;">
+                            <% } else { %>
+                                <span style="display:inline-block; width:36px; height:36px; border-radius:50%; background:#e9ecef; color:#999; line-height:36px;">👤</span>
+                            <% } %>
+                        </td>
+                        <td><%= student.admission_no || "-" %></td>
+                        <td><%= student.name %></td>
+                        <td><span class="badge bg-secondary">Home</span></td>
+                        <td class="text-center">
+                            <input type="checkbox" name="student" value="<%= student.id %>" class="present-checkbox"
+                                data-hours-input="hours_<%= student.id %>" <%= student.checked ? "checked" : "" %>>
+                        </td>
+                        <td>
+                            <input type="number" step="0.5" min="0" max="12" name="hours_<%= student.id %>" id="hours_<%= student.id %>"
+                                class="form-control form-control-sm" value="<%= student.hours %>" <%= student.checked ? "" : "disabled" %>>
+                        </td>
+                    </tr>
+                <% }) %>
+                <% crossBatchEntries.forEach(function(entry) { %>
+                    <tr class="table-warning" id="cross-row-<%= entry.id %>">
+                        <td class="text-center">
+                            <% if (entry.photo_path) { %>
+                                <img src="<%= entry.photo_path %>" alt="" style="width:36px; height:36px; object-fit:cover; border-radius:50%;">
+                            <% } else { %>
+                                <span style="display:inline-block; width:36px; height:36px; border-radius:50%; background:#e9ecef; color:#999; line-height:36px;">👤</span>
+                            <% } %>
+                        </td>
+                        <td><%= entry.admission_no || "-" %></td>
+                        <td><%= entry.name %></td>
+                        <td><span class="badge bg-warning text-dark">Different Batch</span></td>
+                        <td class="text-center">
+                            <input type="checkbox" checked disabled>
+                            <input type="hidden" name="cross_batch_student" value="<%= entry.id %>">
+                        </td>
+                        <td>
+                            <input type="number" step="0.5" min="0" max="12" name="hours_<%= entry.id %>"
+                                class="form-control form-control-sm" value="<%= entry.hours %>">
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+
+        <script>
+            // Hours input only makes sense while the student is marked
+            // Present - disable it (so it doesn't submit a stray value)
+            // and grey it out whenever their checkbox is unchecked.
+            document.querySelectorAll('.present-checkbox').forEach(cb => {
+                cb.addEventListener('change', function () {
+                    const hoursInput = document.getElementById(this.dataset.hoursInput);
+                    if (!hoursInput) return;
+                    hoursInput.disabled = !this.checked;
+                });
+            });
+        </script>
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <label class="form-label small mb-1">Add a student attending from a DIFFERENT batch today (e.g. makeup class)</label>
+                <div class="d-flex gap-2">
+                    <input type="text" id="crossBatchSearch" class="form-control" placeholder="Search by Roll No. or Name...">
+                </div>
+                <div id="crossBatchResults" class="list-group mt-2"></div>
+            </div>
+        </div>
+
+        <button class="btn btn-success">💾 Save Attendance</button>
+
+    </form>
+
+    <% } else if (selectedBatch) { %>
+        <p class="text-muted">No students are assigned to this batch yet.</p>
+    <% } %>
+
+</div>
+
+<script>
+// Pre-fills the hours box when a student is added via cross-batch search;
+// School-configurable default (see Settings > Attendance).
+const DEFAULT_HOURS_ATTENDED = <%= defaultHours %>;
+
+// Level filter narrows the Batch dropdown to just that level's batches.
+const levelFilter = document.getElementById('levelFilter');
+const batchSelect = document.getElementById('batchSelect');
+const levelIdHidden = document.getElementById('levelIdHidden');
+const allBatchOptions = Array.from(batchSelect.options);
+
+function applyLevelFilter() {
+    const levelId = levelFilter.value;
+    levelIdHidden.value = levelId;
+    batchSelect.innerHTML = '';
+    batchSelect.appendChild(new Option('Select Batch', ''));
+    allBatchOptions.forEach(opt => {
+        if (!opt.value) return; // skip the placeholder we already re-added
+        if (!levelId || opt.dataset.level === levelId) {
+            batchSelect.appendChild(opt.cloneNode(true));
+        }
+    });
+}
+levelFilter.addEventListener('change', applyLevelFilter);
+if (levelFilter.value) applyLevelFilter();
+
+// Smart Student Search - the main new entry point: find a student by
+// Roll No./Name without needing to already know their Batch, see their
+// photo/Batch/Level at a glance, and jump straight to their roster with
+// them scrolled-to and highlighted.
+const smartSearch = document.getElementById('smartSearch');
+if (smartSearch) {
+    let smartDebounce;
+    smartSearch.addEventListener('input', function () {
+        clearTimeout(smartDebounce);
+        const q = this.value.trim();
+        const resultsArea = document.getElementById('smartSearchResults');
+        if (q.length < 2) { resultsArea.innerHTML = ''; return; }
+        smartDebounce = setTimeout(async () => {
+            const res = await fetch('/attendance/search-students?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            if (!data.ok) return;
+            if (data.students.length === 0) {
+                resultsArea.innerHTML = '<div class="list-group-item text-muted">No matches</div>';
+                return;
+            }
+            resultsArea.innerHTML = data.students.map(s => {
+                const photo = s.photo_path
+                    ? `<img src="${s.photo_path}" alt="" style="width:40px; height:40px; object-fit:cover; border-radius:50%;">`
+                    : `<span style="display:inline-block; width:40px; height:40px; border-radius:50%; background:#e9ecef; color:#999; line-height:40px; text-align:center;">👤</span>`;
+                const batchBadge = s.batch_name ? `<span class="badge bg-secondary">${s.batch_name}</span>` : `<span class="badge bg-light text-dark border">No batch</span>`;
+                const levelBadge = s.level_name ? `<span class="badge bg-primary">${s.level_name}</span>` : '';
+                return `
+                    <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                        onclick="jumpToStudent(${s.id}, ${s.batch_id || 'null'}, ${s.level_id || 'null'})">
+                        ${photo}
+                        <span class="flex-grow-1">
+                            <div><strong>${s.name}</strong> ${s.admission_no ? '(' + s.admission_no + ')' : ''}</div>
+                            <div>${batchBadge} ${levelBadge}</div>
+                        </span>
+                    </button>
+                `;
+            }).join('');
+        }, 250);
+    });
+}
+
+function jumpToStudent(studentId, batchId, levelId) {
+    if (!batchId) {
+        alert('This student has no Batch assigned yet - set one from their Edit Student page first.');
+        return;
+    }
+    const date = document.getElementById('attendanceDateInput').value || new Date().toISOString().slice(0, 10);
+    const params = new URLSearchParams({
+        batch_id: batchId,
+        attendance_date: date,
+        highlight_student_id: studentId
+    });
+    if (levelId) params.set('level_id', levelId);
+    window.location.href = '/attendance/load?' + params.toString();
+}
+
+// If we landed here via a smart-search jump, scroll to and highlight that
+// student's row so it's obvious at a glance, without hunting through the roster.
+<% if (highlightStudentId) { %>
+(function () {
+    const row = document.getElementById('student-row-<%= highlightStudentId %>') || document.getElementById('cross-row-<%= highlightStudentId %>');
+    if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.style.transition = 'background-color 0.3s';
+        row.style.backgroundColor = '#fff3cd';
+        setTimeout(() => { row.style.backgroundColor = ''; }, 2500);
+    }
+})();
+<% } %>
+
+// Cross-batch student search + add.
+const searchBox = document.getElementById('crossBatchSearch');
+if (searchBox) {
+    let debounceTimer;
+    searchBox.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        const q = this.value.trim();
+        const resultsArea = document.getElementById('crossBatchResults');
+        if (q.length < 2) { resultsArea.innerHTML = ''; return; }
+        debounceTimer = setTimeout(async () => {
+            const res = await fetch('/attendance/search-students?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            if (!data.ok) return;
+            resultsArea.innerHTML = data.students.map(s => `
+                <button type="button" class="list-group-item list-group-item-action" onclick="addCrossBatchStudent(${s.id}, '${s.name.replace(/'/g, "\\'")}', '${(s.admission_no || '').replace(/'/g, "\\'")}', '${(s.photo_path || '').replace(/'/g, "\\'")}')">
+                    ${s.name} ${s.admission_no ? '(' + s.admission_no + ')' : ''}
+                </button>
+            `).join('') || '<div class="list-group-item text-muted">No matches</div>';
+        }, 250);
+    });
+}
+
+function addCrossBatchStudent(id, name, admissionNo, photoPath) {
+    if (document.getElementById('cross-row-' + id)) return; // already added
+    const tbody = document.querySelector('#attendanceForm table tbody');
+    const tr = document.createElement('tr');
+    tr.className = 'table-warning';
+    tr.id = 'cross-row-' + id;
+    const photoCell = photoPath
+        ? `<img src="${photoPath}" alt="" style="width:36px; height:36px; object-fit:cover; border-radius:50%;">`
+        : `<span style="display:inline-block; width:36px; height:36px; border-radius:50%; background:#e9ecef; color:#999; line-height:36px;">👤</span>`;
+    tr.innerHTML = `
+        <td class="text-center">${photoCell}</td>
+        <td>${admissionNo || '-'}</td>
+        <td>${name}</td>
+        <td><span class="badge bg-warning text-dark">Different Batch</span></td>
+        <td class="text-center">
+            <input type="checkbox" checked disabled>
+            <input type="hidden" name="cross_batch_student" value="${id}">
+        </td>
+        <td>
+            <input type="number" step="0.5" min="0" max="12" name="hours_${id}" class="form-control form-control-sm" value="${DEFAULT_HOURS_ATTENDED}">
+        </td>
+    `;
+    tbody.appendChild(tr);
+    document.getElementById('crossBatchSearch').value = '';
+    document.getElementById('crossBatchResults').innerHTML = '';
+}
+</script>
+
+<%- include("partials/footer") %>

@@ -1,0 +1,147 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/leads" class="btn btn-outline-secondary btn-sm mb-3">&larr; Leads</a>
+
+<h2>➕ New Referral Lead</h2>
+<p class="text-muted">Record a prospective student someone referred - before they've enrolled. A unique coupon code is generated right away.</p>
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow">
+            <div class="card-body">
+                <form action="/leads/new" method="POST">
+
+                    <div class="mb-3">
+                        <label class="form-label d-block">Referrer is</label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" class="btn-check" name="referrer_type" id="refTypeStudent" value="student" checked onchange="toggleReferrerType()">
+                            <label class="btn btn-outline-primary btn-sm" for="refTypeStudent">An Existing Student</label>
+                            <input type="radio" class="btn-check" name="referrer_type" id="refTypeLead" value="lead" onchange="toggleReferrerType()">
+                            <label class="btn btn-outline-primary btn-sm" for="refTypeLead">A Lead (not enrolled here)</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3" id="referrerStudentBlock">
+                        <label class="form-label">Referring Student</label>
+                        <input type="text" id="referrerSearch" class="form-control" placeholder="Search by name or roll number..." autocomplete="off">
+                        <input type="hidden" name="referring_student_id" id="referrerId">
+                        <div id="referrerResults" class="list-group mt-2"></div>
+                        <div id="referrerSelected" class="mt-2"></div>
+                    </div>
+
+                    <div class="mb-3 row" id="referrerLeadBlock" style="display:none">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Referrer's Name</label>
+                            <input type="text" name="referring_lead_name" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Referrer's Phone</label>
+                            <input type="text" name="referring_lead_phone" class="form-control">
+                        </div>
+                        <small class="text-muted">e.g. a parent, alumnus, or walk-in who referred a family without being an enrolled student here themselves.</small>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <label class="form-label">Lead's Name</label>
+                        <input type="text" name="lead_name" class="form-control" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Lead's Phone</label>
+                            <input type="text" name="lead_phone" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Lead's Email</label>
+                            <input type="email" name="lead_email" class="form-control">
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Reward Type</label>
+                            <select name="reward_type" id="rewardType" class="form-select" onchange="toggleRewardType()">
+                                <option value="FLAT" <%= school.referral_reward_type==='FLAT' ? 'selected' : '' %>>Flat Amount (₹)</option>
+                                <option value="PERCENT" <%= school.referral_reward_type==='PERCENT' ? 'selected' : '' %>>Percentage (%)</option>
+                                <option value="PRIZE" <%= school.referral_reward_type==='PRIZE' ? 'selected' : '' %>>Prize (non-monetary)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3" id="rewardValueBlock">
+                            <label class="form-label">Reward Value</label>
+                            <input type="number" step="0.01" name="reward_value" class="form-control" value="<%= school.referral_reward_value %>">
+                        </div>
+                        <div class="col-md-6 mb-3" id="prizeDescriptionBlock" style="display:none">
+                            <label class="form-label">Prize Description</label>
+                            <input type="text" name="prize_description" class="form-control" placeholder="e.g. Abacus kit, water bottle, gift voucher">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Notes (optional)</label>
+                        <textarea name="notes" class="form-control" rows="2"></textarea>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input type="checkbox" name="send_now" id="sendNow" class="form-check-input" checked>
+                        <label class="form-check-label" for="sendNow">
+                            Send the coupon code to the referring student's guardian right away
+                            <% if (!emailConfigured) { %><span class="text-muted small">(WhatsApp only - Email isn't configured)</span><% } %>
+                            <br><span class="text-muted small">(Only applies when the referrer is an existing student - a lead referrer has no guardian contact on file.)</span>
+                        </label>
+                    </div>
+
+                    <button class="btn btn-success">Create Lead &amp; Generate Coupon</button>
+
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleReferrerType() {
+    const isLead = document.getElementById('refTypeLead').checked;
+    document.getElementById('referrerStudentBlock').style.display = isLead ? 'none' : 'block';
+    document.getElementById('referrerLeadBlock').style.display = isLead ? 'flex' : 'none';
+    document.getElementById('sendNow').disabled = isLead;
+    if (isLead) document.getElementById('sendNow').checked = false;
+}
+function toggleRewardType() {
+    const isPrize = document.getElementById('rewardType').value === 'PRIZE';
+    document.getElementById('rewardValueBlock').style.display = isPrize ? 'none' : 'block';
+    document.getElementById('prizeDescriptionBlock').style.display = isPrize ? 'block' : 'none';
+}
+
+const referrerSearch = document.getElementById('referrerSearch');
+let debounceTimer;
+referrerSearch.addEventListener('input', function () {
+    clearTimeout(debounceTimer);
+    const q = this.value.trim();
+    const resultsArea = document.getElementById('referrerResults');
+    document.getElementById('referrerId').value = '';
+    if (q.length < 2) { resultsArea.innerHTML = ''; return; }
+    debounceTimer = setTimeout(async () => {
+        const res = await fetch('/leads/search-students?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.ok) return;
+        resultsArea.innerHTML = data.students.map(s => `
+            <button type="button" class="list-group-item list-group-item-action" onclick="selectReferrer(${s.id}, '${s.name.replace(/'/g, "\\'")}', '${(s.admission_no || '').replace(/'/g, "\\'")}')">
+                ${s.name} ${s.admission_no ? '(' + s.admission_no + ')' : ''}
+            </button>
+        `).join('') || '<div class="list-group-item text-muted">No matches</div>';
+    }, 250);
+});
+
+function selectReferrer(id, name, admissionNo) {
+    document.getElementById('referrerId').value = id;
+    document.getElementById('referrerSelected').innerHTML = `<span class="badge bg-primary">Selected: ${name} ${admissionNo ? '(' + admissionNo + ')' : ''}</span>`;
+    document.getElementById('referrerResults').innerHTML = '';
+    referrerSearch.value = name;
+}
+</script>
+
+<%- include("partials/footer") %>

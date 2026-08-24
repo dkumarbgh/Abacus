@@ -1,0 +1,192 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h2>Student Report</h2>
+    <div>
+        <a href="/level-promotion?student_id=<%= student.id %>" class="btn btn-outline-primary">🎓 Promote Level</a>
+        <a href="/certificates/generate/<%= student.id %>" class="btn btn-outline-primary" target="_blank">📜 Generate Certificate</a>
+        <button class="btn btn-outline-secondary" onclick="window.print()">🖨 Print</button>
+    </div>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-body d-flex align-items-center gap-3">
+        <% if (student.photo_path) { %>
+            <img src="<%= student.photo_path %>" width="80" height="80" style="object-fit:cover" class="rounded-circle border">
+        <% } %>
+        <div>
+            <h4 class="mb-1"><%= student.name %></h4>
+            <div class="text-muted">
+                <%= student.class_name || "Not Assigned" %> &middot;
+                Roll Number: <%= student.admission_no || "-" %> &middot;
+                Age: <%= student.age %>
+            </div>
+            <div class="text-muted">Guardian: <%= student.guardian_name || "-" %> (<%= student.guardian_phone || "-" %>)</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white"><h5>Attendance</h5></div>
+            <div class="card-body">
+                <p>Present Days (all-time): <b><%= attSummary.present_days || 0 %></b> / <%= attSummary.total_marked || 0 %> marked</p>
+                <p>Overall Attendance %:
+                    <% if (attendancePct !== "N/A" && attendancePct < 75) { %>
+                        <span class="badge bg-danger"><%= attendancePct %>%</span>
+                    <% } else if (attendancePct === "N/A") { %>
+                        <span class="text-muted">N/A</span>
+                    <% } else { %>
+                        <span class="badge bg-success"><%= attendancePct %>%</span>
+                    <% } %>
+                </p>
+
+                <% if (student.batch_name) { %>
+                    <p class="small text-muted mb-1">
+                        Batch: <%= student.batch_name %><%= student.sessions_per_week ? ' (' + student.sessions_per_week + ' sessions/week)' : '' %>
+                    </p>
+                <% } %>
+
+                <hr>
+                <h6 class="small text-muted">Monthly Regularity (last 6 months)</h6>
+                <% if (!student.sessions_per_week) { %>
+                    <p class="small text-muted">No batch schedule set - can't calculate expected classes per month.</p>
+                <% } else { %>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead><tr><th>Month</th><th>Attended</th><th>Expected</th><th>%</th><th>Status</th></tr></thead>
+                        <tbody>
+                            <% monthlyRegularity.forEach(function(m) { %>
+                                <tr>
+                                    <td><%= m.month %></td>
+                                    <td><%= m.attended %></td>
+                                    <td><%= m.expected == null ? '-' : m.expected %></td>
+                                    <td><%= m.pct == null ? '-' : m.pct + '%' %></td>
+                                    <td>
+                                        <% if (m.status === 'Regular') { %>
+                                            <span class="badge bg-success">Regular</span>
+                                        <% } else if (m.status === 'Irregular') { %>
+                                            <span class="badge bg-danger">Irregular</span>
+                                        <% } else { %>
+                                            <span class="text-muted">-</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-warning d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Fee Status</h5>
+                <% if (simpleFeeMode) { %><span class="badge bg-dark">Paid / Not Paid</span><% } %>
+            </div>
+            <div class="card-body">
+                <% if (simpleFeeMode) { %>
+                    <p>
+                        <% var allPaid = feeInfo.feeItems.length > 0 && feeInfo.feeItems.every(f => f.due <= 0); %>
+                        <% if (feeInfo.feeItems.length === 0) { %>
+                            <span class="text-muted">No fee structure for this class</span>
+                        <% } else if (allPaid) { %>
+                            <span class="badge bg-success">All fees paid</span>
+                        <% } else { %>
+                            <span class="badge bg-danger">Fees pending</span>
+                        <% } %>
+                    </p>
+                    <table class="table table-sm table-bordered">
+                        <thead><tr><th>Fee</th><th>Status</th></tr></thead>
+                        <tbody>
+                            <% if (feeInfo.feeItems.length === 0) { %>
+                                <tr><td colspan="2" class="text-center">No fee structure for this class</td></tr>
+                            <% } %>
+                            <% feeInfo.feeItems.forEach(f => { %>
+                                <tr class="<%= f.due > 0 ? 'table-warning' : '' %>">
+                                    <td><%= f.fee_name %></td>
+                                    <td>
+                                        <% if (f.due > 0) { %>
+                                            <span class="badge bg-danger">Not Paid</span>
+                                        <% } else { %>
+                                            <span class="badge bg-success">Paid</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } else { %>
+                    <p>Total Outstanding: <b>₹<%= feeInfo.totalDue %></b></p>
+                    <table class="table table-sm table-bordered">
+                        <thead><tr><th>Fee</th><th>Amount</th><th>Discount</th><th>Paid</th><th>Due</th></tr></thead>
+                        <tbody>
+                            <% if (feeInfo.feeItems.length === 0) { %>
+                                <tr><td colspan="5" class="text-center">No fee structure for this class</td></tr>
+                            <% } %>
+                            <% feeInfo.feeItems.forEach(f => { %>
+                                <tr class="<%= f.due > 0 ? 'table-warning' : '' %>">
+                                    <td><%= f.fee_name %></td>
+                                    <td>₹<%= f.amount %></td>
+                                    <td>
+                                        <% if (f.discount) { %>
+                                            <% if (f.discount.discount_type === 'PERCENT') { %>
+                                                <%= f.discount.discount_value %>%
+                                            <% } else { %>
+                                                ₹<%= f.discount.discount_value %>
+                                            <% } %>
+                                        <% } else { %>
+                                            &mdash;
+                                        <% } %>
+                                    </td>
+                                    <td>₹<%= f.paid %></td>
+                                    <td>₹<%= f.due %></td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } %>
+                <a href="/fee-payments/<%= student.id %>" class="btn btn-sm btn-success no-print">Collect Fee</a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-success text-white"><h5>Exam History</h5></div>
+    <div class="card-body">
+        <table class="table table-bordered">
+            <thead class="table-dark">
+                <tr><th>Exam</th><th>Date</th><th>Subject</th><th>Marks</th></tr>
+            </thead>
+            <tbody>
+                <% if (examResults.length === 0) { %>
+                    <tr><td colspan="4" class="text-center">No exam records yet</td></tr>
+                <% } %>
+                <% examResults.forEach(e => { %>
+                    <tr>
+                        <td><%= e.exam_name %></td>
+                        <td><%= e.exam_date || "-" %></td>
+                        <td><%= e.subject_name %></td>
+                        <td><%= e.marks_obtained %> / <%= e.max_marks %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<a href="/students" class="btn btn-link no-print">&larr; Back to Students</a>
+
+<style>
+    @media print {
+        .no-print, nav, .navbar { display: none !important; }
+    }
+</style>
+
+<%- include("partials/footer") %>

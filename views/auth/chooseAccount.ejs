@@ -1,0 +1,42 @@
+<%- include("../partials/header") %>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="text-center mb-2">Choose an Account</h3>
+                    <p class="text-muted text-center mb-4">
+                        This email is used at more than one school. Which one do you want to log into?
+                    </p>
+
+                    <% if (error) { %>
+                        <div class="alert alert-danger"><%= error %></div>
+                    <% } %>
+
+                    <form method="POST" action="/login/choose-account">
+                        <div class="list-group mb-3">
+                            <% accounts.forEach(function(a, i) { %>
+                                <label class="list-group-item d-flex align-items-center gap-3">
+                                    <input type="radio" name="account_id" value="<%= a.id %>" class="form-check-input mt-0" <%= i===0 ? "checked" : "" %>>
+                                    <span>
+                                        <strong><%= a.school_name || "No school (Super Admin)" %></strong>
+                                        <span class="badge bg-secondary ms-2"><%= a.role %></span>
+                                        <div class="small text-muted"><%= a.name %></div>
+                                    </span>
+                                </label>
+                            <% }) %>
+                        </div>
+                        <button class="btn btn-primary w-100">Continue</button>
+                    </form>
+
+                    <p class="text-center mt-3 mb-0">
+                        <a href="/login">&larr; Not you? Back to login</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("../partials/footer") %>

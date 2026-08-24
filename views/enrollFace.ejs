@@ -1,0 +1,39 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4>Enroll Face &mdash; <%= student.name %></h4>
+            </div>
+            <div class="card-body">
+
+                <% if (student.photo_path) { %>
+                    <p>Current photo:</p>
+                    <img src="<%= student.photo_path %>" alt="current photo" width="120" class="rounded border mb-3">
+                <% } %>
+
+                <form action="/students/enroll-face/<%= student.id %>" method="POST" enctype="multipart/form-data">
+
+                    <div class="mb-3">
+                        <label class="form-label">Upload a clear, front-facing photo</label>
+                        <input type="file" name="photo" accept="image/*" class="form-control" required>
+                        <small class="text-muted">
+                            Good lighting, one face only, looking at the camera. This is what the mobile
+                            app will match against during face-recognition attendance.
+                        </small>
+                    </div>
+
+                    <button class="btn btn-success w-100">Save & Enroll Face</button>
+
+                </form>
+
+                <a href="/students" class="btn btn-link mt-2">&larr; Back to Students</a>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("partials/footer") %>

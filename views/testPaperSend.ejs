@@ -1,0 +1,153 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/test-papers" class="btn btn-outline-secondary btn-sm mb-3">&larr; Test Papers</a>
+
+<h2>Send: <%= paper.level_name %> Test Paper</h2>
+<p class="text-muted">
+    Paper Date: <%= paper.paper_date %> &middot; <%= paper.problem_count %> problems
+    &middot; <a href="/test-papers/<%= paper.id %>/view" target="_blank">👁 View this paper</a>
+</p>
+
+<form action="/test-papers/<%= paper.id %>/send" method="POST" id="sendForm">
+
+    <div class="card shadow mb-3">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+            <span>Select Students</span>
+            <span>
+                <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-light">Select All</button>
+                <button type="button" id="clearAllBtn" class="btn btn-sm btn-outline-light">Clear All</button>
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">Filter by Class</label>
+                    <select id="classFilter" class="form-select">
+                        <option value="">All Classes</option>
+                        <% classes.forEach(function(c) { %>
+                            <option value="<%= c.id %>"><%= c.class_name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">Filter by Batch</label>
+                    <select id="batchFilter" class="form-select">
+                        <option value="">All Batches</option>
+                        <% batches.forEach(function(b) { %>
+                            <option value="<%= b.id %>"><%= b.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">Filter by Level</label>
+                    <select id="levelFilter" class="form-select">
+                        <option value="">All Levels</option>
+                        <% levels.forEach(function(l) { %>
+                            <option value="<%= l.id %>" <%= l.id === paper.level_id ? "selected" : "" %>><%= l.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+
+            <div id="studentListArea" style="max-height:300px; overflow-y:auto;" class="mb-3">
+                <p class="text-muted">Loading students at this paper's Level...</p>
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input type="checkbox" name="via_whatsapp" class="form-check-input" id="viaWhatsapp">
+                        <label class="form-check-label" for="viaWhatsapp">Send via WhatsApp</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input type="checkbox" name="via_email" class="form-check-input" id="viaEmail" <%= emailConfigured ? "" : "disabled" %>>
+                        <label class="form-check-label" for="viaEmail">
+                            Send via Email
+                            <% if (!emailConfigured) { %>
+                                <span class="text-muted">(not configured - see .env.example)</span>
+                            <% } %>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label small mb-0">Message / Caption</label>
+                <input type="text" name="caption" class="form-control" placeholder="Please find attached the <%= paper.level_name %> level abacus practice/test paper.">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small mb-0">Email Subject (if sending via Email)</label>
+                <input type="text" name="subject" class="form-control" value="Abacus Test Paper - <%= paper.level_name %>">
+            </div>
+
+            <button type="button" id="sendBtn" class="btn btn-success">📤 Send This Paper</button>
+        </div>
+    </div>
+
+</form>
+
+<script>
+async function loadStudents() {
+    const classId = document.getElementById('classFilter').value;
+    const batchId = document.getElementById('batchFilter').value;
+    const levelId = document.getElementById('levelFilter').value;
+    const area = document.getElementById('studentListArea');
+
+    const params = new URLSearchParams();
+    if (classId) params.set('class_id', classId);
+    if (batchId) params.set('batch_id', batchId);
+    if (levelId) params.set('level_id', levelId);
+
+    const res = await fetch('/test-papers/students?' + params.toString());
+    const data = await res.json();
+    if (!data.ok) { area.innerHTML = '<p class="text-danger">Could not load students.</p>'; return; }
+    if (data.students.length === 0) { area.innerHTML = '<p class="text-muted">No students match this filter.</p>'; return; }
+
+    area.innerHTML = data.students.map(s => `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="${s.id}" id="stu_${s.id}" data-student-checkbox>
+            <label class="form-check-label" for="stu_${s.id}">
+                ${s.name}${s.admission_no ? ' (' + s.admission_no + ')' : ''}
+                ${!s.guardian_phone ? ' <span class="text-muted small">[no phone]</span>' : ''}
+                ${!s.guardian_email ? ' <span class="text-muted small">[no email]</span>' : ''}
+            </label>
+        </div>
+    `).join('');
+}
+
+document.getElementById('classFilter').addEventListener('change', loadStudents);
+document.getElementById('batchFilter').addEventListener('change', loadStudents);
+document.getElementById('levelFilter').addEventListener('change', loadStudents);
+
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('[data-student-checkbox]').forEach(cb => cb.checked = true);
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('[data-student-checkbox]').forEach(cb => cb.checked = false);
+});
+
+document.getElementById('sendBtn').addEventListener('click', () => {
+    const form = document.getElementById('sendForm');
+    const selectedIds = Array.from(document.querySelectorAll('[data-student-checkbox]:checked')).map(cb => cb.value);
+    if (selectedIds.length === 0) { alert('Please select at least one student.'); return; }
+
+    selectedIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'student_ids';
+        input.value = id;
+        form.appendChild(input);
+    });
+
+    form.submit();
+});
+
+// Pre-load students filtered to this paper's own Level, since that's the
+// obvious default for "who is this paper for".
+loadStudents();
+</script>
+
+<%- include("partials/footer") %>

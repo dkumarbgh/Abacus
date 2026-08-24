@@ -1,0 +1,89 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between mb-3">
+
+        <h2>📚 Subject Management</h2>
+
+        <a href="/subjects/add" class="btn btn-primary">
+            + Add Subject
+        </a>
+
+    </div>
+
+    <table class="table table-bordered table-striped">
+
+        <thead class="table-dark">
+
+            <tr>
+
+                <th>ID</th>
+                <th>Subject Name</th>
+                <th>Code</th>
+                <th>Description</th>
+                <th width="180">Actions</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+        <% if(subjects.length==0){ %>
+
+            <tr>
+
+                <td colspan="5" class="text-center">
+
+                    No Subjects Found
+
+                </td>
+
+            </tr>
+
+        <% } %>
+
+        <% subjects.forEach(function(subject){ %>
+
+            <tr>
+
+                <td><%= subject.id %></td>
+
+                <td><%= subject.subject_name %></td>
+
+                <td><%= subject.subject_code %></td>
+
+                <td><%= subject.description %></td>
+
+                <td>
+
+                    <a href="/subjects/edit/<%= subject.id %>"
+                       class="btn btn-warning btn-sm">
+
+                        Edit
+
+                    </a>
+
+                    <a href="/subjects/delete/<%= subject.id %>"
+                       class="btn btn-danger btn-sm"
+                       onclick="return confirm('Delete this subject?')">
+
+                        Delete
+
+                    </a>
+
+                </td>
+
+            </tr>
+
+        <% }) %>
+
+        </tbody>
+
+    </table>
+
+</div>
+
+<%- include("partials/footer") %>

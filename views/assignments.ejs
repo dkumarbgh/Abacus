@@ -1,0 +1,235 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+    <div class="row">
+
+        <div class="col-md-4">
+
+            <div class="card shadow">
+
+                <div class="card-header bg-primary text-white">
+
+                    <h4>📖 Assign Subject</h4>
+
+                </div>
+
+                <div class="card-body">
+
+                    <form action="/assignments/add" method="POST">
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Teacher
+                            </label>
+
+                            <select
+                                name="teacher_id"
+                                class="form-select"
+                                required>
+
+                                <option value="">
+                                    Select Teacher
+                                </option>
+
+                                <% teachers.forEach(function(teacher){ %>
+
+                                    <option value="<%= teacher.id %>">
+
+                                        <%= teacher.name %>
+
+                                    </option>
+
+                                <% }) %>
+
+                            </select>
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Subject
+                            </label>
+
+                            <select
+                                name="subject_id"
+                                class="form-select"
+                                required>
+
+                                <option value="">
+                                    Select Subject
+                                </option>
+
+                                <% subjects.forEach(function(subject){ %>
+
+                                    <option value="<%= subject.id %>">
+
+                                        <%= subject.subject_name %>
+
+                                    </option>
+
+                                <% }) %>
+
+                            </select>
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Class
+                            </label>
+
+                            <select
+                                name="class_id"
+                                class="form-select"
+                                required>
+
+                                <option value="">
+                                    Select Class
+                                </option>
+
+                                <% classes.forEach(function(cls){ %>
+
+                                    <option value="<%= cls.id %>">
+
+                                        <%= cls.class_name %>
+
+                                    </option>
+
+                                <% }) %>
+
+                            </select>
+
+                        </div>
+
+                        <button
+                            class="btn btn-success w-100">
+
+                            Save Assignment
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-8">
+
+            <div class="card shadow">
+
+                <div class="card-header bg-dark text-white">
+
+                    <h4>Assigned Subjects</h4>
+
+                </div>
+
+                <div class="card-body">
+
+                    <table class="table table-bordered table-striped">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>ID</th>
+
+                                <th>Teacher</th>
+
+                                <th>Subject</th>
+
+                                <th>Class</th>
+
+                                <th width="120">
+
+                                    Action
+
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                        <% if(assignments.length==0){ %>
+
+                            <tr>
+
+                                <td colspan="5" class="text-center">
+
+                                    No Assignments Found
+
+                                </td>
+
+                            </tr>
+
+                        <% } %>
+
+                        <% assignments.forEach(function(a){ %>
+
+                            <tr>
+
+                                <td>
+
+                                    <%= a.id %>
+
+                                </td>
+
+                                <td>
+
+                                    <%= a.teacher_name %>
+
+                                </td>
+
+                                <td>
+
+                                    <%= a.subject_name %>
+
+                                </td>
+
+                                <td>
+
+                                    <%= a.class_name %>
+
+                                </td>
+
+                                <td>
+
+                                    <a
+                                        href="/assignments/delete/<%= a.id %>"
+                                        class="btn btn-danger btn-sm"
+                                        onclick="return confirm('Delete Assignment?')">
+
+                                        Delete
+
+                                    </a>
+
+                                </td>
+
+                            </tr>
+
+                        <% }) %>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

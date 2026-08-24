@@ -1,0 +1,185 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Promote Level</h2>
+<p class="text-muted">
+    Update one or more students' Level, and optionally generate their Level Completion certificate
+    for the level they're leaving. Works the same way for a single student or a whole batch.
+</p>
+
+<% if (promotedCount) { %>
+    <div class="alert alert-success"><%= promotedCount %> student(s) promoted successfully.</div>
+<% } %>
+
+<% if (levels.length === 0) { %>
+    <div class="alert alert-info">No Levels set up yet. <a href="/lists">Add some first</a>.</div>
+<% } else { %>
+
+<form action="/level-promotion/apply" method="POST" id="promoteForm" target="_blank">
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Filter by Class</label>
+            <select id="classFilter" class="form-select">
+                <option value="">All Classes</option>
+                <% classes.forEach(function(c) { %>
+                    <option value="<%= c.id %>"><%= c.class_name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Filter by Current Level</label>
+            <select id="levelFilter" class="form-select">
+                <option value="">Any Level</option>
+                <% levels.forEach(function(l) { %>
+                    <option value="<%= l.id %>"><%= l.name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Promote To (New Level)</label>
+            <select name="new_level_id" class="form-select" required>
+                <option value="">Select new level</option>
+                <% levels.forEach(function(l) { %>
+                    <option value="<%= l.id %>"><%= l.name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Date</label>
+            <input type="date" name="date" class="form-control" value="<%= new Date().toISOString().slice(0,10) %>">
+        </div>
+    </div>
+
+    <div class="card shadow mb-3">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <span>Select Students</span>
+            <span>
+                <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-light">Select All</button>
+                <button type="button" id="clearAllBtn" class="btn btn-sm btn-outline-light">Clear All</button>
+            </span>
+        </div>
+        <div class="card-body" id="studentListArea" style="max-height:400px; overflow-y:auto;">
+            <p class="text-muted">Choose a Class or current Level filter above to load students, or they'll all show up if you leave both blank.</p>
+        </div>
+    </div>
+
+    <% if (templates.length > 0) { %>
+    <div class="card shadow mb-3">
+        <div class="card-body">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="generate_certificate" id="genCertCheck">
+                <label class="form-check-label" for="genCertCheck">
+                    Also generate a Level Completion certificate for the level being completed
+                </label>
+            </div>
+            <div id="certOptions" style="display:none;">
+                <label class="form-label small mb-0">Certificate Template</label>
+                <select name="template_id" id="templateSelect" class="form-select mb-2">
+                    <option value="">Select a template</option>
+                    <% templates.forEach(function(t) { %>
+                        <option value="<%= t.id %>"><%= t.name %></option>
+                    <% }) %>
+                </select>
+                <div id="customFieldsArea" class="row g-2"></div>
+                <small class="text-muted">
+                    Student Name, Date, and the Level being completed fill in automatically per student -
+                    only fields beyond those (if your template has any) need a value here.
+                </small>
+            </div>
+        </div>
+    </div>
+    <% } else { %>
+        <p class="small text-muted">No "Level Completion" certificate templates yet - you can still promote students without one.
+        <a href="/certificates/templates">Add a template</a> if you want to issue certificates too.</p>
+    <% } %>
+
+    <button class="btn btn-success">✅ Apply Promotion</button>
+
+</form>
+
+<% } %>
+
+<script>
+const preselectId = "<%= preselectStudentId %>";
+
+async function loadStudents() {
+    const classId = document.getElementById('classFilter').value;
+    const levelId = document.getElementById('levelFilter').value;
+    const area = document.getElementById('studentListArea');
+
+    const params = new URLSearchParams();
+    if (classId) params.set('class_id', classId);
+    if (levelId) params.set('level_id', levelId);
+
+    const res = await fetch('/level-promotion/students?' + params.toString());
+    const data = await res.json();
+    if (!data.ok) { area.innerHTML = '<p class="text-danger">Could not load students.</p>'; return; }
+
+    if (data.students.length === 0) {
+        area.innerHTML = '<p class="text-muted">No students match this filter.</p>';
+        return;
+    }
+
+    area.innerHTML = data.students.map(s => `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="student_ids" value="${s.id}" id="stu_${s.id}"
+                ${String(s.id) === preselectId ? 'checked' : ''}>
+            <label class="form-check-label" for="stu_${s.id}">
+                ${s.name}${s.admission_no ? ' (' + s.admission_no + ')' : ''}
+                ${s.current_level_name ? ' - currently ' + s.current_level_name : ' - no current level set'}
+            </label>
+        </div>
+    `).join('');
+}
+
+document.getElementById('classFilter').addEventListener('change', loadStudents);
+document.getElementById('levelFilter').addEventListener('change', loadStudents);
+
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('#studentListArea input[type=checkbox]').forEach(cb => cb.checked = true);
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('#studentListArea input[type=checkbox]').forEach(cb => cb.checked = false);
+});
+
+const genCertCheck = document.getElementById('genCertCheck');
+if (genCertCheck) {
+    genCertCheck.addEventListener('change', function () {
+        document.getElementById('certOptions').style.display = this.checked ? 'block' : 'none';
+    });
+}
+
+const templateSelect = document.getElementById('templateSelect');
+if (templateSelect) {
+    templateSelect.addEventListener('change', async function () {
+        const area = document.getElementById('customFieldsArea');
+        area.innerHTML = '';
+        if (!this.value) return;
+        try {
+            const res = await fetch('/certificates/templates/' + this.value + '/fields.json');
+            const data = await res.json();
+            if (!data.ok) return;
+            // student_name/date are handled automatically by the server; so
+            // is level_name specifically for THIS promotion flow (auto-filled
+            // from each student's level being completed) - never ask for it here.
+            data.fields.filter(f => f.field_key !== 'level_name').forEach(f => {
+                const div = document.createElement('div');
+                div.className = 'col-md-4';
+                div.innerHTML = `<label class="form-label small mb-0">${f.label}</label>
+                    <input type="text" name="field_${f.field_key}" class="form-control">`;
+                area.appendChild(div);
+            });
+        } catch (e) {
+            console.error('Could not load template fields:', e);
+        }
+    });
+}
+
+// Load students immediately if we arrived pre-selecting one specific
+// student (from their profile page) so they're visible without needing
+// to touch the filters first.
+if (preselectId) loadStudents();
+</script>
+
+<%- include("partials/footer") %>

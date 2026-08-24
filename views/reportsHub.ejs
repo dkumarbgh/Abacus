@@ -1,0 +1,101 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Reports</h2>
+
+<div class="row g-3">
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>💰 Fees Due Report</h5>
+                <p class="text-muted">Upcoming and overdue fee due-dates across students.</p>
+                <a href="/reports/fees-due" class="btn btn-primary">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>📆 Attendance Regularity Report</h5>
+                <p class="text-muted">Month-wise: who's attending regularly vs. irregularly, filterable by class, batch, or student name.</p>
+                <a href="/reports/attendance-regularity" class="btn btn-primary">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>📊 Attendance Detail Report</h5>
+                <p class="text-muted">Multi-month breakdown per student: expected vs. attended, split into own-batch vs. different-batch attendance.</p>
+                <a href="/reports/attendance-detail" class="btn btn-primary">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>⚠ Inactive Students</h5>
+                <p class="text-muted">Students who haven't attended in a while (or never) - a follow-up list before they drop out.</p>
+                <a href="/reports/inactive-students" class="btn btn-primary">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>⏰ Attendance After Due Date</h5>
+                <p class="text-muted">Students with an overdue fee - how many classes have they attended since the due date passed?</p>
+                <a href="/reports/attendance-after-due-date" class="btn btn-primary">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>⚠ Fees Pending Report</h5>
+                <p class="text-muted">Every student with an outstanding balance, with bulk WhatsApp reminders.</p>
+                <a href="/reports/fees-pending" class="btn btn-primary">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>📊 Exam Level Results</h5>
+                <p class="text-muted">Class rank sheet for a specific exam, subject-wise marks.</p>
+                <% if (exams.length === 0) { %>
+                    <p class="text-muted small">No exams created yet.</p>
+                <% } else { %>
+                    <form action="" onsubmit="return false;">
+                        <select class="form-select mb-2" onchange="window.location='/reports/exam-results/'+this.value">
+                            <option value="">Select an exam...</option>
+                            <% exams.forEach(e => { %>
+                                <option value="<%= e.id %>"><%= e.exam_name %> (<%= e.level_name %>)</option>
+                            <% }) %>
+                        </select>
+                    </form>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5>👤 Student Individual Report</h5>
+                <p class="text-muted">Combined profile: attendance %, fee status, exam history.</p>
+                <a href="/students" class="btn btn-primary">Pick a Student</a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<%- include("partials/footer") %>

@@ -1,0 +1,132 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/certificates/templates" class="btn btn-outline-secondary btn-sm mb-3">&larr; Templates</a>
+
+<h2>Bulk Generate Certificates</h2>
+
+<% if (templates.length === 0) { %>
+    <div class="alert alert-info">No certificate templates set up yet. <a href="/certificates/templates">Add one first</a>.</div>
+<% } else { %>
+
+<form action="/certificates/bulk/generate" method="POST" target="_blank" id="bulkForm">
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Template</label>
+            <select name="template_id" id="templateSelect" class="form-select" required>
+                <option value="">Select a template</option>
+                <% templates.forEach(function(t) { %>
+                    <option value="<%= t.id %>"><%= t.name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Filter by Class</label>
+            <select id="classFilter" class="form-select">
+                <option value="">All Classes</option>
+                <% classes.forEach(function(c) { %>
+                    <option value="<%= c.id %>"><%= c.class_name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Filter by Batch</label>
+            <select id="batchFilter" class="form-select">
+                <option value="">All Batches</option>
+                <% batches.forEach(function(b) { %>
+                    <option value="<%= b.id %>"><%= b.name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-0">Date</label>
+            <input type="date" name="date" class="form-control" value="<%= new Date().toISOString().slice(0,10) %>">
+        </div>
+    </div>
+
+    <div id="customFieldsArea" class="row g-2 mb-3"></div>
+
+    <div class="card shadow mb-3">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <span>Select Students</span>
+            <span>
+                <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-light">Select All</button>
+                <button type="button" id="clearAllBtn" class="btn btn-sm btn-outline-light">Clear All</button>
+            </span>
+        </div>
+        <div class="card-body" id="studentListArea" style="max-height:400px; overflow-y:auto;">
+            <p class="text-muted">Choose a Class or Batch filter above to load students.</p>
+        </div>
+    </div>
+
+    <button class="btn btn-success">📜 Generate Certificates for Selected</button>
+
+</form>
+
+<% } %>
+
+<script>
+async function loadStudents() {
+    const classId = document.getElementById('classFilter').value;
+    const batchId = document.getElementById('batchFilter').value;
+    const area = document.getElementById('studentListArea');
+
+    if (!classId && !batchId) {
+        area.innerHTML = '<p class="text-muted">Choose a Class or Batch filter above to load students.</p>';
+        return;
+    }
+
+    const params = new URLSearchParams();
+    if (classId) params.set('class_id', classId);
+    if (batchId) params.set('batch_id', batchId);
+
+    const res = await fetch('/certificates/bulk/students?' + params.toString());
+    const data = await res.json();
+    if (!data.ok) { area.innerHTML = '<p class="text-danger">Could not load students.</p>'; return; }
+
+    if (data.students.length === 0) {
+        area.innerHTML = '<p class="text-muted">No students match this filter.</p>';
+        return;
+    }
+
+    area.innerHTML = data.students.map(s => `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="student_ids" value="${s.id}" id="stu_${s.id}">
+            <label class="form-check-label" for="stu_${s.id}">${s.name}${s.admission_no ? ' (' + s.admission_no + ')' : ''}</label>
+        </div>
+    `).join('');
+}
+
+document.getElementById('classFilter').addEventListener('change', loadStudents);
+document.getElementById('batchFilter').addEventListener('change', loadStudents);
+
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('#studentListArea input[type=checkbox]').forEach(cb => cb.checked = true);
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('#studentListArea input[type=checkbox]').forEach(cb => cb.checked = false);
+});
+
+document.getElementById('templateSelect').addEventListener('change', async function () {
+    const area = document.getElementById('customFieldsArea');
+    area.innerHTML = '';
+    if (!this.value) return;
+    try {
+        const res = await fetch('/certificates/templates/' + this.value + '/fields.json');
+        const data = await res.json();
+        if (!data.ok) return;
+        data.fields.forEach(f => {
+            const div = document.createElement('div');
+            div.className = 'col-md-4';
+            div.innerHTML = `<label class="form-label small mb-0">${f.label}</label>
+                <input type="text" name="field_${f.field_key}" class="form-control">`;
+            area.appendChild(div);
+        });
+    } catch (e) {
+        console.error('Could not load template fields:', e);
+    }
+});
+</script>
+
+<%- include("partials/footer") %>

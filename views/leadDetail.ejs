@@ -1,0 +1,134 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<a href="/leads" class="btn btn-outline-secondary btn-sm mb-3">&larr; Leads</a>
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card shadow mb-3">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Coupon: <code class="text-white"><%= referral.coupon_code %></code></h4>
+            </div>
+            <div class="card-body">
+                <p><strong>Referred by:</strong> <%= referral.referring_student_name %></p>
+                <p>
+                    <strong>Lead / Student:</strong>
+                    <%= referral.referred_student_name || referral.lead_name %>
+                    <% if (!referral.referred_student_name) { %><span class="badge bg-secondary">Not enrolled yet</span><% } %>
+                </p>
+                <% if (referral.lead_phone) { %><p><strong>Phone:</strong> <%= referral.lead_phone %></p><% } %>
+                <% if (referral.lead_email) { %><p><strong>Email:</strong> <%= referral.lead_email %></p><% } %>
+                <p>
+                    <strong>Status:</strong>
+                    <% const statusColor = { New: 'secondary', Contacted: 'info', Enrolled: 'primary', Redeemed: 'success' }[referral.status] || 'secondary'; %>
+                    <span class="badge bg-<%= statusColor %>"><%= referral.status %></span>
+                </p>
+                <p><strong>Reward:</strong> <%= referral.reward_type === 'PERCENT' ? referral.reward_value + '%' : referral.reward_type === 'PRIZE' ? referral.prize_description : '₹' + referral.reward_value %></p>
+                <% if (referral.notes) { %><p><strong>Notes:</strong> <%= referral.notes %></p><% } %>
+                <% if (referral.redeemed_at) { %><p class="text-success"><strong>Redeemed on:</strong> <%= referral.redeemed_at %></p><% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+
+        <% if (referral.status !== 'Redeemed') { %>
+        <div class="card shadow mb-3">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0">Update Status</h5></div>
+            <div class="card-body">
+                <form action="/leads/<%= referral.id %>/status" method="POST" class="d-flex gap-2">
+                    <select name="status" class="form-select">
+                        <% ["New","Contacted","Enrolled"].forEach(function(s) { %>
+                            <option value="<%= s %>" <%= referral.status===s ? "selected" : "" %>><%= s %></option>
+                        <% }) %>
+                    </select>
+                    <button class="btn btn-primary">Save</button>
+                </form>
+            </div>
+        </div>
+        <% } %>
+
+        <% if (!referral.referred_student_id) { %>
+        <div class="card shadow mb-3">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0">Link to an Enrolled Student</h5></div>
+            <div class="card-body">
+                <p class="small text-muted">Once this lead actually enrolls, link them here.</p>
+                <form action="/leads/<%= referral.id %>/link-student" method="POST">
+                    <input type="text" id="leadStudentSearch" class="form-control mb-2" placeholder="Search by name or roll number..." autocomplete="off">
+                    <input type="hidden" name="student_id" id="leadStudentId" required>
+                    <div id="leadStudentResults" class="list-group mb-2"></div>
+                    <button class="btn btn-primary">Link Student</button>
+                </form>
+            </div>
+        </div>
+        <% } %>
+
+        <div class="card shadow mb-3">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0">Send Coupon Message</h5></div>
+            <div class="card-body">
+                <form action="/leads/<%= referral.id %>/send-message" method="POST">
+                    <div class="form-check">
+                        <input type="checkbox" name="via_whatsapp" id="viaW" class="form-check-input" checked>
+                        <label class="form-check-label" for="viaW">WhatsApp</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input type="checkbox" name="via_email" id="viaE" class="form-check-input" <%= emailConfigured ? "" : "disabled" %>>
+                        <label class="form-check-label" for="viaE">Email <% if (!emailConfigured) { %><span class="text-muted small">(not configured)</span><% } %></label>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm">📤 Send / Resend Code</button>
+                </form>
+            </div>
+        </div>
+
+        <% if (referral.status !== 'Redeemed') { %>
+        <div class="card shadow">
+            <div class="card-header bg-success text-white"><h5 class="mb-0">Redeem</h5></div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    <% if (referral.reward_type === 'PRIZE') { %>
+                        Marks this reward as handed over (a prize isn't a fee discount, so nothing changes on <%= referral.referring_student_name %>'s fee record).
+                    <% } else if (!referral.referring_student_id) { %>
+                        Marks this reward as handed over. <%= referral.referring_student_name %> isn't an enrolled student here, so there's no fee record to discount - the reward needs to be given some other way.
+                    <% } else { %>
+                        Applies the reward as a discount against <%= referral.referring_student_name %>'s fees.
+                    <% } %></p>
+                <form action="/leads/<%= referral.id %>/redeem" method="POST" onclick="return confirm('Apply this reward now?')">
+                    <button class="btn btn-success w-100">🎟 Redeem This Coupon</button>
+                </form>
+            </div>
+        </div>
+        <% } %>
+
+    </div>
+</div>
+
+<script>
+const leadStudentSearch = document.getElementById('leadStudentSearch');
+if (leadStudentSearch) {
+    let debounceTimer;
+    leadStudentSearch.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        const q = this.value.trim();
+        const resultsArea = document.getElementById('leadStudentResults');
+        document.getElementById('leadStudentId').value = '';
+        if (q.length < 2) { resultsArea.innerHTML = ''; return; }
+        debounceTimer = setTimeout(async () => {
+            const res = await fetch('/leads/search-students?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            if (!data.ok) return;
+            resultsArea.innerHTML = data.students.map(s => `
+                <button type="button" class="list-group-item list-group-item-action" onclick="selectLeadStudent(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
+                    ${s.name} ${s.admission_no ? '(' + s.admission_no + ')' : ''}
+                </button>
+            `).join('') || '<div class="list-group-item text-muted">No matches</div>';
+        }, 250);
+    });
+}
+function selectLeadStudent(id, name) {
+    document.getElementById('leadStudentId').value = id;
+    document.getElementById('leadStudentResults').innerHTML = `<span class="badge bg-primary">Selected: ${name}</span>`;
+    leadStudentSearch.value = name;
+}
+</script>
+
+<%- include("partials/footer") %>
