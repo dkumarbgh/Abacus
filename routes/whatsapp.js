@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
-const { sendMessage, sendBulk, isReady, getDiagnostics, getRecentLogs, getLastQrImage } = require("../services/whatsappClient");
+const { sendToPhones, sendBulk, isReady, getDiagnostics, getRecentLogs, getLastQrImage } = require("../services/whatsappClient");
 const { requireLogin, requireRole, requireFeature } = require("../middleware/auth");
 
 router.use(requireLogin);
@@ -19,7 +19,7 @@ router.get("/", (req, res) => {
         if (err) return res.send(err.message);
 
         db.all(
-            `SELECT students.id, students.name, students.guardian_phone, classes.class_name
+            `SELECT students.id, students.name, students.guardian_phone, students.guardian_phone_2, classes.class_name
              FROM students LEFT JOIN classes ON students.class_id = classes.id
              WHERE students.school_id = ?
              ORDER BY students.name`,
@@ -69,7 +69,7 @@ router.post("/send", async (req, res) => {
 
         if (err || !student) return res.send("Student not found");
 
-        await sendMessage({ phone: student.guardian_phone, message, studentId: student.id, type: "CUSTOM", schoolId: req.schoolId });
+        await sendToPhones([student.guardian_phone, student.guardian_phone_2], { message, studentId: student.id, type: "CUSTOM", schoolId: req.schoolId });
 
         res.redirect("/whatsapp");
 
@@ -90,7 +90,7 @@ router.post("/broadcast", (req, res) => {
         if (err) return res.send(err.message);
 
         const recipients = students.map(s => ({
-            phone: s.guardian_phone,
+            phones: [s.guardian_phone, s.guardian_phone_2],
             studentId: s.id,
             type: "CUSTOM",
             message,

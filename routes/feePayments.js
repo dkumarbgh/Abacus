@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
-const { sendMessage } = require("../services/whatsappClient");
+const { sendToPhones } = require("../services/whatsappClient");
 const { requireLogin } = require("../middleware/auth");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
 const { assignNextReceiptNo } = require("../services/schoolSettings");
@@ -186,10 +186,10 @@ router.post("/pay", async (req, res) => {
 
                             db.get("SELECT * FROM students WHERE id=?", [student_id], (err2, student) => {
 
-                                if (!err2 && student && student.guardian_phone) {
+                                if (!err2 && student && (student.guardian_phone || student.guardian_phone_2)) {
                                     const feeName = feeInfo ? feeInfo.fee_name : "school fee";
                                     const message = `Dear Parent, we have received Rs.${amount_paid} towards "${feeName}" for ${student.name}. Receipt No: ${receipt_no}. Thank you. - School Office`;
-                                    sendMessage({ phone: student.guardian_phone, message, studentId: student_id, type: "FEE_REMINDER", schoolId });
+                                    sendToPhones([student.guardian_phone, student.guardian_phone_2], { message, studentId: student_id, type: "FEE_REMINDER", schoolId });
                                 }
 
                                 res.redirect(`/fee-payments/${student_id}`);
@@ -287,10 +287,10 @@ router.post("/mark-paid", async (req, res) => {
 
                                             db.get("SELECT * FROM students WHERE id=?", [student_id], (err2, student) => {
 
-                                                if (!err2 && student && student.guardian_phone) {
+                                                if (!err2 && student && (student.guardian_phone || student.guardian_phone_2)) {
                                                     const feeName = feeInfo ? feeInfo.fee_name : "school fee";
                                                     const message = `Dear Parent, we have received full payment towards "${feeName}" for ${student.name}. Receipt No: ${receipt_no}. Thank you. - School Office`;
-                                                    sendMessage({ phone: student.guardian_phone, message, studentId: student_id, type: "FEE_REMINDER", schoolId });
+                                                    sendToPhones([student.guardian_phone, student.guardian_phone_2], { message, studentId: student_id, type: "FEE_REMINDER", schoolId });
                                                 }
 
                                                 res.redirect(`/fee-payments/${student_id}`);

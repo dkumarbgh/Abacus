@@ -196,7 +196,7 @@ router.post("/inactive-students/follow-up", (req, res) => {
     }
 
     db.all(
-        `SELECT id, name, guardian_phone FROM students WHERE school_id=? AND id IN (${studentIds.map(() => "?").join(",")})`,
+        `SELECT id, name, guardian_phone, guardian_phone_2 FROM students WHERE school_id=? AND id IN (${studentIds.map(() => "?").join(",")})`,
         [schoolId, ...studentIds],
         (err, students) => {
 
@@ -205,8 +205,8 @@ router.post("/inactive-students/follow-up", (req, res) => {
 
             if (err) return console.error("Inactive-students follow-up lookup failed:", err.message);
 
-            const recipients = students.filter(s => s.guardian_phone).map(s => ({
-                phone: s.guardian_phone,
+            const recipients = students.filter(s => s.guardian_phone || s.guardian_phone_2).map(s => ({
+                phones: [s.guardian_phone, s.guardian_phone_2],
                 studentId: s.id,
                 type: "ATTENDANCE_ALERT",
                 schoolId,
@@ -798,7 +798,7 @@ router.post("/fees-pending/remind", (req, res) => {
 
         if (err) return res.send(err.message);
 
-        let pending = results.filter(r => r.totalDue > 0 && r.student.guardian_phone);
+        let pending = results.filter(r => r.totalDue > 0 && (r.student.guardian_phone || r.student.guardian_phone_2));
         // Same post-filter as the GET route, so "remind all below" only
         // messages the guardians actually shown on the filtered page.
         if (batch_id) { pending = pending.filter(r => String(r.student.batch_id) === String(batch_id)); }
@@ -809,7 +809,7 @@ router.post("/fees-pending/remind", (req, res) => {
         getSimpleFeeMode(schoolId).then(simpleFeeMode => {
 
             const recipients = pending.map(r => ({
-                phone: r.student.guardian_phone,
+                phones: [r.student.guardian_phone, r.student.guardian_phone_2],
                 studentId: r.student.id,
                 type: "FEE_REMINDER",
                 schoolId,

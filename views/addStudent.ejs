@@ -398,7 +398,7 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">
-                                Parent Contact No.
+                                WhatsApp 1 Number
                                 <% if (fieldSettings.guardian_phone) { %><span class="text-danger">*</span><% } %>
                             </label>
                             <input type="text" name="guardian_phone" class="form-control"
@@ -421,14 +421,14 @@
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">
-                                Guardian's Contact No.
+                                WhatsApp 2 Number
                                 <% if (fieldSettings.guardian_phone_2) { %><span class="text-danger">*</span><% } %>
                             </label>
                             <input type="text" name="guardian_phone_2" class="form-control"
                                    placeholder="e.g. 919876543210 (with country code)"
                                    value="<%= old.guardian_phone_2 || '' %>"
                                    <%= fieldSettings.guardian_phone_2 ? "required" : "" %>>
-                            <small class="text-muted">Optional second contact, e.g. if the Guardian above is different from the parent.</small>
+                            <small class="text-muted">Optional second number - WhatsApp updates go to BOTH numbers when both are filled in.</small>
                         </div>
                     </div>
 

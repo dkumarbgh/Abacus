@@ -27,7 +27,14 @@ const db = require("../config/database");
  * host where you only have a few seconds to catch it in a log stream).
  */
 
-const SESSION_PATH = path.join(__dirname, "..", "whatsapp-session");
+// Configurable via WHATSAPP_SESSION_PATH so it can point at a persistent
+// disk mount on hosts with an ephemeral filesystem (e.g. Render) - a
+// Render Disk is mounted at its own separate absolute path (e.g.
+// /var/data), not inside the deployed app folder, so the default below
+// (relative to this app) only survives restarts/redeploys if you've set
+// that env var to point at the mounted disk instead. Mirrors how
+// config/database.js makes DB_PATH configurable for the same reason.
+const SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || path.join(__dirname, "..", "whatsapp-session");
 
 let ready = false;
 let lastQrDataUrl = null;   // most recent QR code, as a data: URL image
@@ -251,15 +258,46 @@ function sendMessage({ phone, message, attachmentPath = null, studentId = null, 
 }
 
 /**
+ * Sends the same message to however many of a student's WhatsApp numbers
+ * are actually on file (WhatsApp 1 and/or WhatsApp 2), logging each as its
+ * own row in message_logs. Duplicate numbers (e.g. both fields left the
+ * same) are only sent once. Returns a single aggregate status so callers
+ * built around "one status per student" (bulk sends, fee-reminder
+ * triggers, etc.) don't need to change how they interpret the result:
+ *   "SENT"     - at least one number went through
+ *   "FAILED"   - at least one number was on file, but none succeeded
+ *   "NO_PHONE" - neither field had a number at all
+ * @param {Array<string|null|undefined>} phones
+ * @param {object} opts - same shape as sendMessage's opts, minus `phone`
+ * @returns {Promise<string>}
+ */
+async function sendToPhones(phones, opts) {
+    const unique = [...new Set((phones || []).filter(Boolean).map(p => String(p).trim()).filter(Boolean))];
+
+    if (unique.length === 0) {
+        log("error", "Send skipped - no WhatsApp number on file for student_id", opts.studentId);
+        return "NO_PHONE";
+    }
+
+    const statuses = [];
+    for (const phone of unique) {
+        statuses.push(await sendMessage({ ...opts, phone }));
+    }
+
+    return statuses.includes("SENT") ? "SENT" : "FAILED";
+}
+
+/**
  * Send to many recipients with a delay between each to avoid rate limiting.
- * @param {Array<{phone,message,studentId,type}>} recipients
+ * @param {Array<{phones: Array<string>, message, studentId, type}>} recipients
  */
 async function sendBulk(recipients, delayMs = 3000) {
     log("info", `Starting bulk send to ${recipients.length} recipient(s), ${delayMs}ms delay between each.`);
     const results = [];
     for (const r of recipients) {
-        const status = await sendMessage(r);
-        results.push({ phone: r.phone, status });
+        const { phones, ...opts } = r;
+        const status = await sendToPhones(phones, opts);
+        results.push({ phones, status });
         await new Promise((res) => setTimeout(res, delayMs));
     }
     const sent = results.filter(r => r.status === "SENT").length;
@@ -270,6 +308,7 @@ async function sendBulk(recipients, delayMs = 3000) {
 module.exports = {
     client,
     sendMessage,
+    sendToPhones,
     sendBulk,
     isReady: () => ready,
     getDiagnostics,

@@ -1,5 +1,5 @@
 const path = require("path");
-const { sendMessage } = require("./whatsappClient");
+const { sendToPhones } = require("./whatsappClient");
 const { sendEmail } = require("./emailClient");
 
 /**
@@ -10,7 +10,7 @@ const { sendEmail } = require("./emailClient");
  * one implementation of "distribute a document", not two.
  *
  * @param {object} opts
- * @param {Array<object>} opts.students - each needs guardian_phone/guardian_email + id/name
+ * @param {Array<object>} opts.students - each needs guardian_phone/guardian_phone_2/guardian_email + id/name
  * @param {string} opts.absoluteFilePath - real path on disk to the file being sent
  * @param {string} opts.fileName - filename to show as the attachment
  * @param {string} opts.caption - message text / email body / WhatsApp caption
@@ -28,9 +28,9 @@ async function distributeDocument({ students, absoluteFilePath, fileName, captio
     for (const student of students) {
 
         if (viaWhatsapp) {
-            if (student.guardian_phone) {
-                const status = await sendMessage({
-                    phone: student.guardian_phone,
+            if (student.guardian_phone || student.guardian_phone_2) {
+                // Sends to WhatsApp 1 AND WhatsApp 2 (whichever are on file).
+                const status = await sendToPhones([student.guardian_phone, student.guardian_phone_2], {
                     message: caption,
                     attachmentPath: absoluteFilePath,
                     studentId: student.id,

@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require("../config/database");
 const crypto = require("crypto");
 const { requireLogin, requireRole } = require("../middleware/auth");
-const { sendMessage } = require("../services/whatsappClient");
+const { sendToPhones } = require("../services/whatsappClient");
 const { sendEmail } = require("../services/emailClient");
 const { applyReferralReward } = require("../services/referralReward");
 const features = require("../config/features");
@@ -154,13 +154,13 @@ router.post("/new", requireRole("Admin"), async (req, res) => {
     // sends in this app - only possible when the referrer is an enrolled
     // student, since a lead referrer has no guardian contact on file here.
     if (send_now === "on" && referrerId) {
-        const referringStudent = await dbGet("SELECT name, guardian_phone, guardian_email FROM students WHERE id=?", [referrerId]);
+        const referringStudent = await dbGet("SELECT name, guardian_phone, guardian_phone_2, guardian_email FROM students WHERE id=?", [referrerId]);
         const school = await dbGet("SELECT name FROM schools WHERE id=?", [schoolId]);
         const referral = await dbGet("SELECT * FROM referrals WHERE id=?", [result.lastID]);
         const message = couponMessage(referral, school ? school.name : "");
 
-        if (features.whatsapp && referringStudent.guardian_phone) {
-            sendMessage({ phone: referringStudent.guardian_phone, message, studentId: referrerId, type: "CUSTOM", schoolId });
+        if (features.whatsapp && (referringStudent.guardian_phone || referringStudent.guardian_phone_2)) {
+            sendToPhones([referringStudent.guardian_phone, referringStudent.guardian_phone_2], { message, studentId: referrerId, type: "CUSTOM", schoolId });
         }
         if (features.email && referringStudent.guardian_email) {
             sendEmail({ to: referringStudent.guardian_email, subject: "Your Referral Code", text: message, studentId: referrerId, type: "CUSTOM", schoolId });
@@ -219,7 +219,7 @@ router.post("/:id/send-message", requireRole("Admin"), async (req, res) => {
     const schoolId = req.schoolId;
     const referral = await dbGet(
         `SELECT referrals.*, COALESCE(ref_by.name, referrals.referring_lead_name) AS referring_student_name,
-                ref_by.guardian_phone, ref_by.guardian_email
+                ref_by.guardian_phone, ref_by.guardian_phone_2, ref_by.guardian_email
          FROM referrals LEFT JOIN students ref_by ON referrals.referring_student_id = ref_by.id
          WHERE referrals.id=? AND referrals.school_id=?`,
         [req.params.id, schoolId]
@@ -234,8 +234,8 @@ router.post("/:id/send-message", requireRole("Admin"), async (req, res) => {
     const viaWhatsapp = req.body.via_whatsapp === "on";
     const viaEmail = req.body.via_email === "on";
 
-    if (viaWhatsapp && features.whatsapp && referral.guardian_phone) {
-        sendMessage({ phone: referral.guardian_phone, message, studentId: referral.referring_student_id, type: "CUSTOM", schoolId });
+    if (viaWhatsapp && features.whatsapp && (referral.guardian_phone || referral.guardian_phone_2)) {
+        sendToPhones([referral.guardian_phone, referral.guardian_phone_2], { message, studentId: referral.referring_student_id, type: "CUSTOM", schoolId });
     }
     if (viaEmail && features.email && referral.guardian_email) {
         sendEmail({ to: referral.guardian_email, subject: "Your Referral Code", text: message, studentId: referral.referring_student_id, type: "CUSTOM", schoolId });

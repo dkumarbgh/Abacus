@@ -47,7 +47,8 @@
                             <option value="">Select student</option>
                             <% students.forEach(s => { %>
                                 <option value="<%= s.id %>">
-                                    <%= s.name %> (<%= s.class_name || "-" %>) &mdash; <%= s.guardian_phone || "no phone on file" %>
+                                    <%= s.name %> (<%= s.class_name || "-" %>) &mdash;
+                                    <%= [s.guardian_phone, s.guardian_phone_2].filter(Boolean).join(" / ") || "no phone on file" %>
                                 </option>
                             <% }) %>
                         </select>

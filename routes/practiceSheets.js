@@ -148,7 +148,7 @@ router.get("/:id/students", requireRole("Admin"), (req, res) => {
     const schoolId = req.schoolId;
     const { class_id, batch_id } = req.query;
 
-    let sql = "SELECT id, name, admission_no, guardian_phone, guardian_email FROM students WHERE school_id=?";
+    let sql = "SELECT id, name, admission_no, guardian_phone, guardian_phone_2, guardian_email FROM students WHERE school_id=?";
     const params = [schoolId];
     if (class_id) { sql += " AND class_id=?"; params.push(class_id); }
     if (batch_id) { sql += " AND batch_id=?"; params.push(batch_id); }
