@@ -9,7 +9,7 @@ Thumbs.db
 school.db
 *.db
 Any.db
-
+.cache/
 *.sqlite
 *.sqlite3
 logs/

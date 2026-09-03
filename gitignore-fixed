@@ -10,6 +10,7 @@ Thumbs.db
 *.sqlite3
 logs/
 .vscode/
+.cache/
 
 # Playwright - GENERATED output only (reports, screenshots, videos, traces).
 # playwright.config.js and tests/ are actual source code and must stay
