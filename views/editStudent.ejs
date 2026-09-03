@@ -47,8 +47,9 @@
                                 Age
                                 <% if (fieldSettings.age) { %><span class="text-danger">*</span><% } %>
                             </label>
-                            <input type="number" name="age" class="form-control" value="<%= student.age %>"
+                            <input type="number" name="age" id="ageInput" class="form-control" value="<%= student.age %>"
                                    <%= fieldSettings.age ? "required" : "" %>>
+                            <small class="text-muted">Auto-filled from Date of Birth; you can still edit it.</small>
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">
@@ -67,7 +68,7 @@
                                 Date of Birth
                                 <% if (fieldSettings.dob) { %><span class="text-danger">*</span><% } %>
                             </label>
-                            <input type="date" name="dob" class="form-control" value="<%= student.dob || '' %>"
+                            <input type="date" name="dob" id="dobInput" class="form-control" value="<%= student.dob || '' %>"
                                    <%= fieldSettings.dob ? "required" : "" %>>
                         </div>
                         <div class="col-md-3 mb-3">
@@ -341,7 +342,7 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">
-                                Guardian WhatsApp Number
+                                Parent Contact No.
                                 <% if (fieldSettings.guardian_phone) { %><span class="text-danger">*</span><% } %>
                             </label>
                             <input type="text" name="guardian_phone" class="form-control" value="<%= student.guardian_phone || '' %>"
@@ -354,6 +355,18 @@
                             </label>
                             <input type="email" name="guardian_email" class="form-control" value="<%= student.guardian_email || '' %>"
                                    <%= fieldSettings.guardian_email ? "required" : "" %>>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">
+                                Guardian's Contact No.
+                                <% if (fieldSettings.guardian_phone_2) { %><span class="text-danger">*</span><% } %>
+                            </label>
+                            <input type="text" name="guardian_phone_2" class="form-control" value="<%= student.guardian_phone_2 || '' %>"
+                                   <%= fieldSettings.guardian_phone_2 ? "required" : "" %>>
+                            <small class="text-muted">Optional second contact, e.g. if the Guardian above is different from the parent.</small>
                         </div>
                     </div>
 
@@ -490,6 +503,31 @@ function addInstallmentRow() {
     `;
     container.appendChild(row);
 }
+
+// Auto-calculate Age from Date of Birth. Age stays editable by hand -
+// this just fills/updates it whenever DOB changes.
+(function() {
+    const dobInput = document.getElementById('dobInput');
+    const ageInput = document.getElementById('ageInput');
+    if (!dobInput || !ageInput) return;
+
+    function calcAge(dobStr) {
+        const dob = new Date(dobStr);
+        if (isNaN(dob.getTime())) return null;
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+            age--;
+        }
+        return age >= 0 ? age : null;
+    }
+
+    dobInput.addEventListener('change', function() {
+        const age = calcAge(dobInput.value);
+        if (age !== null) ageInput.value = age;
+    });
+})();
 </script>
 
 <%- include("partials/footer") %>

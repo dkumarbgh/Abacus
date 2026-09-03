@@ -5,63 +5,17 @@ const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
 
 /* ===========================================
-   REGISTER A NEW SCHOOL (creates the school + its first Admin user)
-=========================================== */
-router.get("/register-school", (req, res) => {
-    res.render("auth/registerSchool", { error: null });
-});
-
-router.post("/register-school", (req, res) => {
-
-    const { school_name, school_address, school_phone, school_email,
-            admin_name, admin_email, admin_password } = req.body;
-
-    if (!school_name || !admin_name || !admin_email || !admin_password) {
-        return res.render("auth/registerSchool", { error: "Please fill in all required fields." });
-    }
-
-    db.run(
-        `INSERT INTO schools (name, address, phone, email) VALUES (?,?,?,?)`,
-        [school_name, school_address, school_phone, school_email],
-        function (err) {
-
-            if (err) return res.render("auth/registerSchool", { error: err.message });
-
-            const schoolId = this.lastID;
-            const passwordHash = bcrypt.hashSync(admin_password, 10);
-
-            db.run(
-                `INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?,?)`,
-                [schoolId, admin_name, admin_email, passwordHash, "Admin"],
-                function (err2) {
-
-                    if (err2) {
-                        const message = err2.message.includes("UNIQUE")
-                            ? "That admin email is already registered. Please log in instead."
-                            : err2.message;
-                        return res.render("auth/registerSchool", { error: message });
-                    }
-
-                    req.session.userId = this.lastID;
-                    req.session.schoolId = schoolId;
-                    req.session.role = "Admin";
-                    req.session.name = admin_name;
-                    req.session.schoolName = school_name;
-
-                    res.redirect("/");
-
-                }
-            );
-
-        }
-    );
-
-});
-
-
-/* ===========================================
    LOGIN / LOGOUT
 =========================================== */
+
+// Public self-service registration used to live here - schools are now
+// only created by a Super Admin (see routes/superAdmin.js /schools/new).
+// This just catches anyone with the old link/bookmark and sends them
+// somewhere useful instead of a bare 404.
+router.get("/register-school", (req, res) => {
+    res.redirect("/login");
+});
+
 router.get("/login", (req, res) => {
     const error = req.session.loginError || null;
     const email = req.session.loginEmail || "";

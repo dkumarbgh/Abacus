@@ -25,21 +25,27 @@ router.get("/attendance-after-due-date", (req, res) => {
     const schoolId = req.schoolId;
     const levelId = req.query.level_id || "";
     const batchId = req.query.batch_id || "";
+    const classId = req.query.class_id || "";
+    const branchId = req.query.branch_id || "";
     const studentName = (req.query.student_name || "").trim();
     const today = new Date().toISOString().slice(0, 10);
 
     Promise.all([
         dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
         dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
+        dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId]),
+        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId]),
         getSimpleFeeMode(schoolId)
-    ]).then(([levels, batches, simpleFeeMode]) => {
+    ]).then(([levels, batches, classes, branches, simpleFeeMode]) => {
 
         let sql = `
             SELECT students.id, students.name, students.admission_no, students.fee_due_date,
-                   level.name AS level_name,
+                   level.name AS level_name, classes.class_name, branch.name AS branch_name,
                    COUNT(CASE WHEN attendance.status='Present' AND attendance.attendance_date > students.fee_due_date THEN 1 END) AS attended_after_due
             FROM students
             LEFT JOIN lookup_items level ON students.level_id = level.id
+            LEFT JOIN classes ON students.class_id = classes.id
+            LEFT JOIN lookup_items branch ON students.branch_id = branch.id
             LEFT JOIN attendance ON attendance.student_id = students.id
             WHERE students.school_id = ?
               AND students.fee_due_date IS NOT NULL
@@ -50,6 +56,8 @@ router.get("/attendance-after-due-date", (req, res) => {
 
         if (levelId) { sql += " AND students.level_id = ?"; params.push(levelId); }
         if (batchId) { sql += " AND students.batch_id = ?"; params.push(batchId); }
+        if (classId) { sql += " AND students.class_id = ?"; params.push(classId); }
+        if (branchId) { sql += " AND students.branch_id = ?"; params.push(branchId); }
         if (studentName) { sql += " AND students.name LIKE ?"; params.push(`%${studentName}%`); }
 
         sql += " GROUP BY students.id ORDER BY attended_after_due DESC, students.name";
@@ -60,7 +68,7 @@ router.get("/attendance-after-due-date", (req, res) => {
 
             if (rows.length === 0) {
                 return res.render("attendanceAfterDueDateReport", {
-                    levels, batches, rows: [], levelId, batchId, studentName, simpleFeeMode
+                    levels, batches, classes, branches, rows: [], levelId, batchId, classId, branchId, studentName, simpleFeeMode
                 });
             }
 
@@ -81,7 +89,7 @@ router.get("/attendance-after-due-date", (req, res) => {
                 }));
 
                 res.render("attendanceAfterDueDateReport", {
-                    levels, batches, rows: withFeeStatus, levelId, batchId, studentName, simpleFeeMode
+                    levels, batches, classes, branches, rows: withFeeStatus, levelId, batchId, classId, branchId, studentName, simpleFeeMode
                 });
 
             });
@@ -121,6 +129,7 @@ router.get("/inactive-students", (req, res) => {
     const classId = req.query.class_id || "";
     const batchId = req.query.batch_id || "";
     const levelId = req.query.level_id || "";
+    const branchId = req.query.branch_id || "";
     const studentName = (req.query.student_name || "").trim();
 
     const cutoff = new Date();
@@ -131,17 +140,19 @@ router.get("/inactive-students", (req, res) => {
     Promise.all([
         dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId]),
         dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
-        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId])
-    ]).then(async ([classes, batches, levels]) => {
+        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
+        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId])
+    ]).then(async ([classes, batches, levels, branches]) => {
 
         let sql = `
             SELECT students.id, students.name, students.admission_no, students.guardian_phone, students.guardian_email,
-                   classes.class_name, batch.name AS batch_name, level.name AS level_name,
+                   classes.class_name, batch.name AS batch_name, level.name AS level_name, branch.name AS branch_name,
                    MAX(CASE WHEN attendance.status='Present' THEN attendance.attendance_date END) AS last_attended
             FROM students
             LEFT JOIN classes ON students.class_id = classes.id
             LEFT JOIN lookup_items batch ON students.batch_id = batch.id
             LEFT JOIN lookup_items level ON students.level_id = level.id
+            LEFT JOIN lookup_items branch ON students.branch_id = branch.id
             LEFT JOIN attendance ON attendance.student_id = students.id
             WHERE students.school_id = ?
         `;
@@ -149,6 +160,7 @@ router.get("/inactive-students", (req, res) => {
         if (classId) { sql += " AND students.class_id = ?"; params.push(classId); }
         if (batchId) { sql += " AND students.batch_id = ?"; params.push(batchId); }
         if (levelId) { sql += " AND students.level_id = ?"; params.push(levelId); }
+        if (branchId) { sql += " AND students.branch_id = ?"; params.push(branchId); }
         if (studentName) { sql += " AND students.name LIKE ?"; params.push(`%${studentName}%`); }
         sql += " GROUP BY students.id HAVING last_attended IS NULL OR last_attended < ? ORDER BY (last_attended IS NULL) DESC, last_attended ASC";
         params.push(cutoffStr);
@@ -164,8 +176,8 @@ router.get("/inactive-students", (req, res) => {
         });
 
         res.render("inactiveStudentsReport", {
-            classes, batches, levels, students: withDaysSince, days,
-            classId, batchId, levelId, studentName
+            classes, batches, levels, branches, students: withDaysSince, days,
+            classId, batchId, levelId, branchId, studentName
         });
 
     }).catch(err => res.send(err.message));
@@ -175,11 +187,11 @@ router.get("/inactive-students", (req, res) => {
 router.post("/inactive-students/follow-up", (req, res) => {
 
     const schoolId = req.schoolId;
-    const { class_id, batch_id, level_id, student_name, days } = req.body;
+    const { class_id, batch_id, level_id, branch_id, student_name, days } = req.body;
     const studentIds = [].concat(req.body.student_ids || []);
 
     if (studentIds.length === 0) {
-        const qs = new URLSearchParams({ class_id, batch_id, level_id, student_name, days }).toString();
+        const qs = new URLSearchParams({ class_id, batch_id, level_id, branch_id, student_name, days }).toString();
         return res.redirect(`/reports/inactive-students?${qs}`);
     }
 
@@ -188,7 +200,7 @@ router.post("/inactive-students/follow-up", (req, res) => {
         [schoolId, ...studentIds],
         (err, students) => {
 
-            const qs = new URLSearchParams({ class_id, batch_id, level_id, student_name, days }).toString();
+            const qs = new URLSearchParams({ class_id, batch_id, level_id, branch_id, student_name, days }).toString();
             res.redirect(`/reports/inactive-students?${qs}`);
 
             if (err) return console.error("Inactive-students follow-up lookup failed:", err.message);
@@ -222,20 +234,23 @@ router.post("/inactive-students/follow-up", (req, res) => {
 
 // Shared by the HTML view and the Excel export below, so both stay in
 // sync on filtering/calculation logic.
-async function buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, studentName, numMonths }) {
+async function buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, branchId, studentName, numMonths }) {
 
     let sql = `
         SELECT students.id, students.name, students.admission_no,
-               classes.class_name, batch.name AS batch_name, batch.sessions_per_week
+               classes.class_name, batch.name AS batch_name, batch.sessions_per_week,
+               branch.name AS branch_name
         FROM students
         LEFT JOIN classes ON students.class_id = classes.id
         LEFT JOIN lookup_items batch ON students.batch_id = batch.id
+        LEFT JOIN lookup_items branch ON students.branch_id = branch.id
         WHERE students.school_id = ?
     `;
     const params = [schoolId];
     if (classId) { sql += " AND students.class_id = ?"; params.push(classId); }
     if (batchId) { sql += " AND students.batch_id = ?"; params.push(batchId); }
     if (levelId) { sql += " AND students.level_id = ?"; params.push(levelId); }
+    if (branchId) { sql += " AND students.branch_id = ?"; params.push(branchId); }
     // Field is labelled "Student Name / Roll No." on the form - it must
     // search BOTH columns, or a roll-number search silently returns
     // nothing (the bug this fixes: it previously only checked name).
@@ -294,6 +309,7 @@ async function buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, 
                 admissionNo: student.admission_no,
                 className: student.class_name,
                 batchName: student.batch_name,
+                branchName: student.branch_name,
                 month, isCurrentMonth,
                 expected,
                 homeAttended: counts.home_attended || 0,
@@ -314,20 +330,22 @@ router.get("/attendance-detail", (req, res) => {
     const classId = req.query.class_id || "";
     const batchId = req.query.batch_id || "";
     const levelId = req.query.level_id || "";
+    const branchId = req.query.branch_id || "";
     const studentName = (req.query.student_name || "").trim();
     const numMonths = Math.max(1, Math.min(12, parseInt(req.query.months) || 3));
 
     Promise.all([
         dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId]),
         dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
-        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId])
-    ]).then(async ([classes, batches, levels]) => {
+        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
+        dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId])
+    ]).then(async ([classes, batches, levels, branches]) => {
 
-        const rows = await buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, studentName, numMonths });
+        const rows = await buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, branchId, studentName, numMonths });
 
         res.render("attendanceDetailReport", {
-            classes, batches, levels, rows, numMonths,
-            classId, batchId, levelId, studentName
+            classes, batches, levels, branches, rows, numMonths,
+            classId, batchId, levelId, branchId, studentName
         });
 
     }).catch(err => res.send(err.message));
@@ -344,12 +362,13 @@ router.get("/attendance-detail/excel", async (req, res) => {
     const classId = req.query.class_id || "";
     const batchId = req.query.batch_id || "";
     const levelId = req.query.level_id || "";
+    const branchId = req.query.branch_id || "";
     const studentName = (req.query.student_name || "").trim();
     const numMonths = Math.max(1, Math.min(12, parseInt(req.query.months) || 3));
 
     try {
 
-        const rows = await buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, studentName, numMonths });
+        const rows = await buildAttendanceDetailRows(schoolId, { classId, batchId, levelId, branchId, studentName, numMonths });
 
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet("Attendance Detail");
@@ -358,6 +377,7 @@ router.get("/attendance-detail/excel", async (req, res) => {
             { header: "Roll Number", key: "admissionNo", width: 15 },
             { header: "Class", key: "className", width: 15 },
             { header: "Batch", key: "batchName", width: 15 },
+            { header: "Branch/Centre", key: "branchName", width: 18 },
             { header: "Month", key: "month", width: 12 },
             { header: "Expected", key: "expected", width: 12 },
             { header: "Attended (Own Batch)", key: "homeAttended", width: 18 },
@@ -371,6 +391,7 @@ router.get("/attendance-detail/excel", async (req, res) => {
             admissionNo: r.admissionNo || "",
             className: r.className || "",
             batchName: r.batchName || "",
+            branchName: r.branchName || "",
             month: r.month,
             expected: r.expected == null ? "-" : r.expected,
             homeAttended: r.expected == null ? "-" : r.homeAttended,
@@ -435,6 +456,8 @@ router.get("/attendance-regularity", (req, res) => {
     const month = req.query.month || new Date().toISOString().slice(0, 7); // "YYYY-MM"
     const levelId = req.query.level_id || "";
     const batchId = req.query.batch_id || "";
+    const classId = req.query.class_id || "";
+    const branchId = req.query.branch_id || "";
     const studentName = (req.query.student_name || "").trim();
 
     // Expected classes so far: sessions/week x (days ELAPSED / 7), not the
@@ -451,17 +474,26 @@ router.get("/attendance-regularity", (req, res) => {
         }),
         new Promise((resolve, reject) => {
             db.all("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
+        }),
+        new Promise((resolve, reject) => {
+            db.all("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
+        }),
+        new Promise((resolve, reject) => {
+            db.all("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
         })
-    ]).then(([levels, batches]) => {
+    ]).then(([levels, batches, classes, branches]) => {
 
         let sql = `
             SELECT students.id, students.name, students.admission_no,
                    level.name AS level_name,
                    batch.name AS batch_name, batch.sessions_per_week,
+                   classes.class_name, branch.name AS branch_name,
                    COUNT(CASE WHEN attendance.status='Present' THEN 1 END) AS attended
             FROM students
             LEFT JOIN lookup_items level ON students.level_id = level.id
             LEFT JOIN lookup_items batch ON students.batch_id = batch.id
+            LEFT JOIN classes ON students.class_id = classes.id
+            LEFT JOIN lookup_items branch ON students.branch_id = branch.id
             LEFT JOIN attendance
                    ON attendance.student_id = students.id
                   AND attendance.attendance_date BETWEEN ? AND ?
@@ -471,6 +503,8 @@ router.get("/attendance-regularity", (req, res) => {
 
         if (levelId) { sql += " AND students.level_id = ?"; params.push(levelId); }
         if (batchId) { sql += " AND students.batch_id = ?"; params.push(batchId); }
+        if (classId) { sql += " AND students.class_id = ?"; params.push(classId); }
+        if (branchId) { sql += " AND students.branch_id = ?"; params.push(branchId); }
         if (studentName) { sql += " AND students.name LIKE ?"; params.push(`%${studentName}%`); }
 
         sql += " GROUP BY students.id ORDER BY students.name";
@@ -505,8 +539,8 @@ router.get("/attendance-regularity", (req, res) => {
                     });
 
                     res.render("attendanceRegularityReport", {
-                        levels, batches, month, rows: withStatus, isCurrentMonth, daysElapsed,
-                        selectedLevel: levelId, selectedBatch: batchId, studentName
+                        levels, batches, classes, branches, month, rows: withStatus, isCurrentMonth, daysElapsed,
+                        selectedLevel: levelId, selectedBatch: batchId, selectedClass: classId, selectedBranch: branchId, studentName
                     });
 
                 }
@@ -648,7 +682,7 @@ function computeDuesByClass(schoolId, classId, callback) {
 =========================================== */
 router.get("/fees-due", (req, res) => {
 
-    const { level_id, month } = req.query;
+    const { level_id, month, class_id, branch_id } = req.query;
     const schoolId = req.schoolId;
 
     // Fetch everyone (not scoped by class/level in computeDuesByClass -
@@ -665,6 +699,8 @@ router.get("/fees-due", (req, res) => {
         const rows = [];
         results.forEach(r => {
             if (level_id && String(r.student.level_id) !== String(level_id)) return;
+            if (class_id && String(r.student.class_id) !== String(class_id)) return;
+            if (branch_id && String(r.student.branch_id) !== String(branch_id)) return;
             r.feeItems.forEach(f => {
                 if (f.due > 0 && f.due_date) {
                     // Optional month filter - "which fees are due THIS
@@ -685,13 +721,22 @@ router.get("/fees-due", (req, res) => {
 
         rows.sort((a, b) => a.due_date.localeCompare(b.due_date));
 
-        db.all("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId], (err2, levels) => {
+        Promise.all([
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId])
+        ]).then(([levels, branches, classes]) => {
 
             getSimpleFeeMode(schoolId)
-                .then(simpleFeeMode => res.render("feesDueReport", { rows, levels, level_id: level_id || "", month: month || "", simpleFeeMode }))
+                .then(simpleFeeMode => res.render("feesDueReport", {
+                    rows, levels, branches, classes,
+                    level_id: level_id || "", month: month || "",
+                    class_id: class_id || "", branch_id: branch_id || "",
+                    simpleFeeMode
+                }))
                 .catch(err3 => res.send(err3.message));
 
-        });
+        }).catch(err2 => res.send(err2.message));
 
     });
 
@@ -704,29 +749,37 @@ router.get("/fees-due", (req, res) => {
 =========================================== */
 router.get("/fees-pending", (req, res) => {
 
-    const { batch_id, level_id } = req.query;
+    const { batch_id, level_id, class_id, branch_id } = req.query;
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
 
         if (err) return res.send(err.message);
 
-        // Batch and Level filters are applied here, after computeDuesByClass,
-        // rather than passed into the helper - computeDuesByClass is shared by
-        // Fees Due, Fees Pending, and the Student Report, so narrowing it down
-        // here keeps that shared helper's signature untouched.
+        // Batch, Level, Class(Standard) and Branch/Centre filters are applied
+        // here, after computeDuesByClass, rather than passed into the helper -
+        // computeDuesByClass is shared by Fees Due, Fees Pending, and the
+        // Student Report, so narrowing it down here keeps that shared helper's
+        // signature untouched.
         let pending = results.filter(r => r.totalDue > 0);
         if (batch_id) { pending = pending.filter(r => String(r.student.batch_id) === String(batch_id)); }
         if (level_id) { pending = pending.filter(r => String(r.student.level_id) === String(level_id)); }
+        if (class_id) { pending = pending.filter(r => String(r.student.class_id) === String(class_id)); }
+        if (branch_id) { pending = pending.filter(r => String(r.student.branch_id) === String(branch_id)); }
 
         Promise.all([
             dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
-            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId])
-        ]).then(([batches, levels]) => {
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId])
+        ]).then(([batches, levels, branches, classes]) => {
 
             getSimpleFeeMode(schoolId)
                 .then(simpleFeeMode => res.render("feesPendingReport", {
-                    pending, batches, levels, batch_id: batch_id || "", level_id: level_id || "", simpleFeeMode
+                    pending, batches, levels, branches, classes,
+                    batch_id: batch_id || "", level_id: level_id || "",
+                    class_id: class_id || "", branch_id: branch_id || "",
+                    simpleFeeMode
                 }))
                 .catch(err3 => res.send(err3.message));
 
@@ -738,7 +791,7 @@ router.get("/fees-pending", (req, res) => {
 
 router.post("/fees-pending/remind", (req, res) => {
 
-    const { batch_id, level_id } = req.body;
+    const { batch_id, level_id, class_id, branch_id } = req.body;
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
@@ -750,6 +803,8 @@ router.post("/fees-pending/remind", (req, res) => {
         // messages the guardians actually shown on the filtered page.
         if (batch_id) { pending = pending.filter(r => String(r.student.batch_id) === String(batch_id)); }
         if (level_id) { pending = pending.filter(r => String(r.student.level_id) === String(level_id)); }
+        if (class_id) { pending = pending.filter(r => String(r.student.class_id) === String(class_id)); }
+        if (branch_id) { pending = pending.filter(r => String(r.student.branch_id) === String(branch_id)); }
 
         getSimpleFeeMode(schoolId).then(simpleFeeMode => {
 
@@ -766,6 +821,8 @@ router.post("/fees-pending/remind", (req, res) => {
             const qs = new URLSearchParams();
             if (batch_id) qs.set("batch_id", batch_id);
             if (level_id) qs.set("level_id", level_id);
+            if (class_id) qs.set("class_id", class_id);
+            if (branch_id) qs.set("branch_id", branch_id);
             const qsStr = qs.toString();
             res.redirect(`/reports/fees-pending${qsStr ? "?" + qsStr : ""}`);
             sendBulk(recipients, 3000);
@@ -1024,6 +1081,7 @@ router.get("/receipt/:paymentId", (req, res) => {
             doc.text(`Fee: ${payment.fee_name}`);
             doc.text(`Amount Paid: Rs. ${payment.amount_paid}`);
             doc.text(`Mode: ${payment.mode}`);
+            if (payment.reference_no) doc.text(`Reference No.: ${payment.reference_no}`);
             if (payment.remarks) doc.text(`Remarks: ${payment.remarks}`);
 
             doc.moveDown(3);

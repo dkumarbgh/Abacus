@@ -240,6 +240,10 @@ async function migrate() {
             FOREIGN KEY(fee_structure_id) REFERENCES fee_structure(id)
         )
     `);
+    // Reference No.: UTR number, cheque number, card transaction ID, etc -
+    // whatever the bank/payment gateway gave for a non-cash payment.
+    // Optional (Cash payments legitimately have nothing here).
+    await addColumnIfMissing("fee_payments", "reference_no", "TEXT");
 
     await run(`
         CREATE TABLE IF NOT EXISTS face_encodings (
@@ -373,6 +377,7 @@ async function migrate() {
         ["dob", "TEXT"],
         ["guardian_name", "TEXT"],
         ["guardian_phone", "TEXT"],
+        ["guardian_phone_2", "TEXT"],
         ["guardian_email", "TEXT"],
         ["address", "TEXT"],
         ["photo_path", "TEXT"],
@@ -831,6 +836,20 @@ async function migrate() {
     // so existing behaviour is unchanged unless an Admin changes it from
     // /settings.
     await addColumnIfMissing("schools", "default_hours_attended", "REAL NOT NULL DEFAULT 2");
+
+    // Configurable Receipt Number format (replaces the previous hardcoded
+    // "RCPT-<timestamp>"). format is one of:
+    //   'sequential'         -> PREFIX-0001, never resets
+    //   'yearly_reset'       -> PREFIX-2026-0001, counter resets to 1 each new calendar year
+    //   'yearly_continuous'  -> PREFIX-2026-0001, year shown updates but counter never resets
+    // receipt_no_next_year tracks which year receipt_no_next was last
+    // issued for, so 'yearly_reset' knows when to start over - see
+    // assignNextReceiptNo() in services/schoolSettings.js.
+    await addColumnIfMissing("schools", "receipt_no_prefix", "TEXT NOT NULL DEFAULT 'RCPT'");
+    await addColumnIfMissing("schools", "receipt_no_format", "TEXT NOT NULL DEFAULT 'sequential'");
+    await addColumnIfMissing("schools", "receipt_no_digits", "INTEGER NOT NULL DEFAULT 4");
+    await addColumnIfMissing("schools", "receipt_no_next", "INTEGER NOT NULL DEFAULT 1");
+    await addColumnIfMissing("schools", "receipt_no_next_year", "INTEGER");
 
     // Configurable mandatory fields: lets an Admin decide, per form, which
     // optional-by-default fields should be required. Absence of a row for

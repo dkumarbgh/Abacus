@@ -1,0 +1,96 @@
+<%- include("../partials/header") %>
+<%- include("../partials/superAdminNav") %>
+
+<h2>💾 Backup &amp; Restore</h2>
+<p class="text-muted">
+    This works on the <strong>entire database</strong> - every school, every user, every student - not just one
+    school at a time. That's why it lives here under Super Admin rather than on a per-school Settings page.
+</p>
+
+<% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+<% } %>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0">📥 Take a Backup</h5></div>
+            <div class="card-body">
+                <p>Downloads a clean, consistent snapshot of the live database right now, and also saves a copy
+                   here on the server (see the list below).</p>
+                <a href="/super-admin/backup-restore/download-now" class="btn btn-primary">Download Full Backup Now</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100 border-danger">
+            <div class="card-header bg-danger text-white"><h5 class="mb-0">⚠️ Restore from Backup</h5></div>
+            <div class="card-body">
+                <p class="text-danger">
+                    <strong>This replaces the ENTIRE live database</strong> - every school's data - with the
+                    file you upload. Anything created or changed since that backup was taken will be lost.
+                    A safety copy of the current data is taken automatically first, but treat this as a
+                    last resort, not routine maintenance.
+                </p>
+                <form method="POST" action="/super-admin/backup-restore/upload" enctype="multipart/form-data" id="restoreForm">
+                    <div class="mb-3">
+                        <label class="form-label">Backup file (.db)</label>
+                        <input type="file" name="file" accept=".db" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type <code>RESTORE</code> to confirm</label>
+                        <input type="text" name="confirm_text" id="confirmText" class="form-control" autocomplete="off" required>
+                    </div>
+                    <button type="submit" class="btn btn-danger" id="restoreBtn" disabled>Restore Database</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h4 class="mt-2">Saved Backups on This Server</h4>
+<p class="text-muted small">Manual downloads, plus automatic safety copies taken right before every restore.</p>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr><th>File</th><th>Size</th><th>Date</th><th width="220">Action</th></tr>
+    </thead>
+    <tbody>
+        <% if (backups.length === 0) { %>
+            <tr><td colspan="4" class="text-center">No backups saved on the server yet.</td></tr>
+        <% } %>
+        <% backups.forEach(function(b) { %>
+            <tr>
+                <td><code><%= b.name %></code></td>
+                <td><%= b.sizeMB %> MB</td>
+                <td><%= new Date(b.mtime).toLocaleString() %></td>
+                <td>
+                    <a href="/super-admin/backup-restore/download/<%= encodeURIComponent(b.name) %>" class="btn btn-sm btn-outline-primary">Download</a>
+                    <form action="/super-admin/backup-restore/delete/<%= encodeURIComponent(b.name) %>" method="POST" class="d-inline"
+                          onsubmit="return confirm('Delete this saved backup file? This only removes the saved copy, not any live data.')">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<script>
+// Confirm button only enables once "RESTORE" is typed exactly - the real
+// enforcement is server-side (see routes/superAdmin.js), this is just to
+// stop an accidental click.
+const confirmText = document.getElementById('confirmText');
+const restoreBtn = document.getElementById('restoreBtn');
+confirmText.addEventListener('input', () => {
+    restoreBtn.disabled = confirmText.value.trim() !== 'RESTORE';
+});
+document.getElementById('restoreForm').addEventListener('submit', function(e) {
+    if (!confirm('This will REPLACE THE ENTIRE DATABASE for every school. Are you absolutely sure?')) {
+        e.preventDefault();
+    }
+});
+</script>
+
+<%- include("../partials/footer") %>

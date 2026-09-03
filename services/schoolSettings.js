@@ -28,7 +28,8 @@ const FIELD_DEFS = {
         gender:         { label: "Gender",                  defaultMandatory: false },
         dob:            { label: "Date of Birth",            defaultMandatory: false },
         guardian_name:  { label: "Guardian Name",            defaultMandatory: true },
-        guardian_phone: { label: "Guardian WhatsApp Number", defaultMandatory: true },
+        guardian_phone: { label: "Parent Contact No.", defaultMandatory: true },
+        guardian_phone_2: { label: "Guardian's Contact No.", defaultMandatory: false },
         guardian_email: { label: "Guardian Email",           defaultMandatory: false },
         address:        { label: "Address",                  defaultMandatory: false },
         fee_due_date:   { label: "Fee Due Date",             defaultMandatory: false },
@@ -149,4 +150,73 @@ function getDefaultHoursAttended(schoolId) {
     });
 }
 
-module.exports = { getSimpleFeeMode, getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, assignNextAdmissionNo, getDefaultHoursAttended };
+/**
+ * Fetches receipt-number formatting settings for a school, along with a
+ * preview of what the NEXT receipt number would look like right now.
+ * See config/database.js for what each format value means.
+ */
+function getReceiptNoSettings(schoolId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            "SELECT receipt_no_prefix, receipt_no_format, receipt_no_digits, receipt_no_next, receipt_no_next_year FROM schools WHERE id=?",
+            [schoolId],
+            (err, row) => {
+                if (err) return reject(err);
+                const prefix = (row && row.receipt_no_prefix) || "RCPT";
+                const format = (row && row.receipt_no_format) || "sequential";
+                const digits = (row && row.receipt_no_digits) || 4;
+                const currentYear = new Date().getFullYear();
+
+                let next = (row && row.receipt_no_next) || 1;
+                // A yearly-reset counter that's carried over from a
+                // previous year previews as if it's about to reset, even
+                // though the actual reset only happens the moment the
+                // next receipt is really assigned (see assignNextReceiptNo).
+                if (format === "yearly_reset" && row && row.receipt_no_next_year && row.receipt_no_next_year !== currentYear) {
+                    next = 1;
+                }
+
+                const padded = String(next).padStart(digits, "0");
+                const preview = format === "sequential" ? `${prefix}-${padded}` : `${prefix}-${currentYear}-${padded}`;
+                resolve({ prefix, format, digits, next, preview });
+            }
+        );
+    });
+}
+
+/**
+ * Atomically hands out the next receipt number for a school and advances
+ * the counter, so two payments recorded back-to-back never collide.
+ * Returns the assigned string (e.g. "RCPT-0001" or "RCPT-2026-0001").
+ */
+function assignNextReceiptNo(schoolId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            "SELECT receipt_no_prefix, receipt_no_format, receipt_no_digits, receipt_no_next, receipt_no_next_year FROM schools WHERE id=?",
+            [schoolId],
+            (err, row) => {
+                if (err) return reject(err);
+                const prefix = (row && row.receipt_no_prefix) || "RCPT";
+                const format = (row && row.receipt_no_format) || "sequential";
+                const digits = (row && row.receipt_no_digits) || 4;
+                const currentYear = new Date().getFullYear();
+
+                let next = (row && row.receipt_no_next) || 1;
+                if (format === "yearly_reset" && row && row.receipt_no_next_year && row.receipt_no_next_year !== currentYear) {
+                    next = 1; // first receipt of a new calendar year - start the count over
+                }
+
+                const padded = String(next).padStart(digits, "0");
+                const assigned = format === "sequential" ? `${prefix}-${padded}` : `${prefix}-${currentYear}-${padded}`;
+
+                db.run(
+                    "UPDATE schools SET receipt_no_next=?, receipt_no_next_year=? WHERE id=?",
+                    [next + 1, currentYear, schoolId],
+                    (err2) => err2 ? reject(err2) : resolve(assigned)
+                );
+            }
+        );
+    });
+}
+
+module.exports = { getSimpleFeeMode, getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, assignNextAdmissionNo, getDefaultHoursAttended, getReceiptNoSettings, assignNextReceiptNo };

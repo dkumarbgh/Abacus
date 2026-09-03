@@ -4,6 +4,7 @@ const db = require("../config/database");
 const { sendMessage } = require("../services/whatsappClient");
 const { requireLogin } = require("../middleware/auth");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
+const { assignNextReceiptNo } = require("../services/schoolSettings");
 
 router.use(requireLogin);
 
@@ -125,12 +126,12 @@ router.get("/:studentId", (req, res) => {
 /* ==========================================
    RECORD A PAYMENT
 ========================================== */
-router.post("/pay", (req, res) => {
+router.post("/pay", async (req, res) => {
 
-    const { student_id, fee_structure_id, amount_paid, mode, remarks } = req.body;
+    const { student_id, fee_structure_id, amount_paid, mode, reference_no, remarks } = req.body;
     const payment_date = new Date().toISOString().slice(0, 10);
-    const receipt_no = `RCPT-${Date.now()}`;
     const schoolId = req.schoolId;
+    const receipt_no = await assignNextReceiptNo(schoolId);
 
     // Confirm the student and fee item both belong to this school AND that
     // the fee item actually applies to this student - either a class-wide
@@ -167,9 +168,9 @@ router.post("/pay", (req, res) => {
 
             db.run(
                 `INSERT INTO fee_payments
-                 (student_id, fee_structure_id, amount_paid, payment_date, mode, receipt_no, remarks, school_id)
-                 VALUES (?,?,?,?,?,?,?,?)`,
-                [student_id, fee_structure_id, amount_paid, payment_date, mode || "Cash", receipt_no, remarks, schoolId],
+                 (student_id, fee_structure_id, amount_paid, payment_date, mode, reference_no, receipt_no, remarks, school_id)
+                 VALUES (?,?,?,?,?,?,?,?,?)`,
+                [student_id, fee_structure_id, amount_paid, payment_date, mode || "Cash", reference_no || null, receipt_no, remarks, schoolId],
                 function(err) {
 
                     if (err) return res.send(err.message);
@@ -216,10 +217,11 @@ router.post("/pay", (req, res) => {
    recorded as a single payment. Used instead of /pay when the school's
    Simple Fee Mode setting is ON (Settings > Fee Collection).
 ========================================== */
-router.post("/mark-paid", (req, res) => {
+router.post("/mark-paid", async (req, res) => {
 
-    const { student_id, fee_structure_id } = req.body;
+    const { student_id, fee_structure_id, mode, reference_no } = req.body;
     const schoolId = req.schoolId;
+    const paymentMode = mode || "Cash";
 
     // Confirm the student and fee item both belong to this school AND that
     // the fee item actually applies to this student - either a class-wide
@@ -251,7 +253,7 @@ router.post("/mark-paid", (req, res) => {
                     db.get(
                         `SELECT * FROM fee_discounts WHERE student_id=? AND fee_structure_id=? AND school_id=?`,
                         [student_id, fee_structure_id, schoolId],
-                        (discErr, discount) => {
+                        async (discErr, discount) => {
 
                             if (discErr) return res.send(discErr.message);
 
@@ -264,13 +266,13 @@ router.post("/mark-paid", (req, res) => {
                             }
 
                             const payment_date = new Date().toISOString().slice(0, 10);
-                            const receipt_no = `RCPT-${Date.now()}`;
+                            const receipt_no = await assignNextReceiptNo(schoolId);
 
                             db.run(
                                 `INSERT INTO fee_payments
-                                 (student_id, fee_structure_id, amount_paid, payment_date, mode, receipt_no, remarks, school_id)
-                                 VALUES (?,?,?,?,?,?,?,?)`,
-                                [student_id, fee_structure_id, due, payment_date, "Cash", receipt_no, "Marked as Paid (Simple Fee Mode)", schoolId],
+                                 (student_id, fee_structure_id, amount_paid, payment_date, mode, reference_no, receipt_no, remarks, school_id)
+                                 VALUES (?,?,?,?,?,?,?,?,?)`,
+                                [student_id, fee_structure_id, due, payment_date, paymentMode, reference_no || null, receipt_no, "Marked as Paid (Simple Fee Mode)", schoolId],
                                 function(err) {
 
                                     if (err) return res.send(err.message);

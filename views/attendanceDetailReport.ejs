@@ -9,14 +9,14 @@
 
 <div class="d-flex justify-content-end mb-2">
     <a class="btn btn-success btn-sm"
-       href="/reports/attendance-detail/excel?class_id=<%= classId %>&batch_id=<%= batchId %>&level_id=<%= levelId %>&student_name=<%= encodeURIComponent(studentName) %>&months=<%= numMonths %>">
+       href="/reports/attendance-detail/excel?class_id=<%= classId %>&batch_id=<%= batchId %>&level_id=<%= levelId %>&branch_id=<%= branchId %>&student_name=<%= encodeURIComponent(studentName) %>&months=<%= numMonths %>">
         📥 Export to Excel
     </a>
 </div>
 
 <form method="GET" action="/reports/attendance-detail" class="row g-2 mb-4">
     <div class="col-md-2">
-        <label class="form-label small mb-0">Class</label>
+        <label class="form-label small mb-0">Standard/Class</label>
         <select name="class_id" class="form-select">
             <option value="">All Classes</option>
             <% classes.forEach(function(c) { %>
@@ -42,15 +42,24 @@
             <% }) %>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Branch/Centre</label>
+        <select name="branch_id" class="form-select">
+            <option value="">All Branches</option>
+            <% branches.forEach(function(b) { %>
+                <option value="<%= b.id %>" <%= String(branchId)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
         <label class="form-label small mb-0">Student Name / Roll No.</label>
         <input type="text" name="student_name" class="form-control" placeholder="Search..." value="<%= studentName %>">
     </div>
-    <div class="col-md-2">
-        <label class="form-label small mb-0">Months to Show</label>
+    <div class="col-md-1">
+        <label class="form-label small mb-0">Months</label>
         <select name="months" class="form-select">
             <% [1,3,6,12].forEach(function(n) { %>
-                <option value="<%= n %>" <%= numMonths===n ? "selected" : "" %>><%= n %> month<%= n===1?'':'s' %></option>
+                <option value="<%= n %>" <%= numMonths===n ? "selected" : "" %>><%= n %></option>
             <% }) %>
         </select>
     </div>
@@ -68,6 +77,7 @@
             <tr>
                 <th>Student</th>
                 <th>Batch</th>
+                <th>Branch/Centre</th>
                 <th>Month</th>
                 <th>Expected</th>
                 <th>Attended (Own Batch)</th>
@@ -83,6 +93,7 @@
                 <tr class="<%= r.status === 'Irregular' ? 'table-danger' : '' %>">
                     <td><a href="/reports/student/<%= r.studentId %>"><%= r.studentName %></a><%= r.admissionNo ? ' (' + r.admissionNo + ')' : '' %></td>
                     <td><%= r.batchName || '-' %></td>
+                    <td><%= r.branchName || '-' %></td>
                     <td>
                         <%= r.month %>
                         <% if (r.isCurrentMonth) { %>

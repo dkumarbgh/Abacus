@@ -6,7 +6,7 @@
 </h2>
 
 <form method="GET" action="/reports/fees-due" class="row g-2 mb-3">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <select name="level_id" class="form-select" onchange="this.form.submit()">
             <option value="">All Levels</option>
             <% levels.forEach(l => { %>
@@ -15,12 +15,29 @@
         </select>
     </div>
     <div class="col-md-3">
+        <select name="class_id" class="form-select" onchange="this.form.submit()">
+            <option value="">All Standards / Classes</option>
+            <% classes.forEach(c => { %>
+                <option value="<%= c.id %>" <%= class_id==c.id ? "selected" : "" %>><%= c.class_name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select name="branch_id" class="form-select" onchange="this.form.submit()">
+            <option value="">All Branches / Centres</option>
+            <% branches.forEach(b => { %>
+                <option value="<%= b.id %>" <%= branch_id==b.id ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-3">
         <input type="month" name="month" class="form-control" value="<%= month %>" onchange="this.form.submit()">
         <small class="text-muted">Only show dues falling in this month.</small>
     </div>
     <% if (month) { %>
-        <div class="col-md-2 d-flex align-items-start">
-            <a href="/reports/fees-due<%= level_id ? '?level_id=' + level_id : '' %>" class="btn btn-outline-secondary btn-sm">Clear Month Filter</a>
+        <div class="col-md-3 d-flex align-items-start">
+            <% const qs = new URLSearchParams(); if (level_id) qs.set('level_id', level_id); if (class_id) qs.set('class_id', class_id); if (branch_id) qs.set('branch_id', branch_id); const qsStr = qs.toString(); %>
+            <a href="/reports/fees-due<%= qsStr ? '?' + qsStr : '' %>" class="btn btn-outline-secondary btn-sm">Clear Month Filter</a>
         </div>
     <% } %>
 </form>

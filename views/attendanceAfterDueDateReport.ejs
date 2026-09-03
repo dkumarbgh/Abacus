@@ -8,7 +8,7 @@
 </p>
 
 <form method="GET" action="/reports/attendance-after-due-date" class="row g-2 mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label small mb-0">Level</label>
         <select name="level_id" class="form-select">
             <option value="">All Levels</option>
@@ -17,7 +17,7 @@
             <% }) %>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label small mb-0">Batch</label>
         <select name="batch_id" class="form-select">
             <option value="">All Batches</option>
@@ -26,11 +26,29 @@
             <% }) %>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Standard/Class</label>
+        <select name="class_id" class="form-select">
+            <option value="">All Classes</option>
+            <% classes.forEach(function(c) { %>
+                <option value="<%= c.id %>" <%= String(classId)===String(c.id) ? "selected" : "" %>><%= c.class_name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Branch/Centre</label>
+        <select name="branch_id" class="form-select">
+            <option value="">All Branches</option>
+            <% branches.forEach(function(b) { %>
+                <option value="<%= b.id %>" <%= String(branchId)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
         <label class="form-label small mb-0">Student Name</label>
         <input type="text" name="student_name" class="form-control" placeholder="Search by name..." value="<%= studentName %>">
     </div>
-    <div class="col-md-3 d-flex align-items-end">
+    <div class="col-md-2 d-flex align-items-end">
         <button class="btn btn-primary me-2">Apply Filters</button>
         <a href="/reports/attendance-after-due-date" class="btn btn-outline-secondary">Reset</a>
     </div>
@@ -62,19 +80,21 @@
 <table class="table table-bordered table-hover">
     <thead class="table-dark">
         <tr>
-            <th>Student</th><th>Level</th><th>Fee Due Date</th>
+            <th>Student</th><th>Level</th><th>Standard/Class</th><th>Branch/Centre</th><th>Fee Due Date</th>
             <th>Classes Attended After Due Date</th>
             <th>Current Fee Status</th>
         </tr>
     </thead>
     <tbody>
         <% if (rows.length === 0) { %>
-            <tr><td colspan="5" class="text-center">No students with a past-due Fee Due Date match these filters.</td></tr>
+            <tr><td colspan="7" class="text-center">No students with a past-due Fee Due Date match these filters.</td></tr>
         <% } %>
         <% rows.forEach(function(r) { %>
             <tr class="<%= r.attended_after_due > 0 ? 'table-warning' : '' %>">
                 <td><a href="/reports/student/<%= r.id %>"><%= r.name %></a></td>
                 <td><%= r.level_name || '-' %></td>
+                <td><%= r.class_name || '-' %></td>
+                <td><%= r.branch_name || '-' %></td>
                 <td><%= r.fee_due_date %></td>
                 <td>
                     <% if (r.attended_after_due > 0) { %>

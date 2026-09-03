@@ -122,6 +122,47 @@
         </div>
     <div class="col-md-7 mt-4">
         <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5>Receipt Number Format</h5></div>
+            <div class="card-body">
+
+                <form action="/settings/receipt-no" method="POST">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Prefix</label>
+                            <input type="text" name="receipt_no_prefix" class="form-control" placeholder="e.g. RCPT" value="<%= receiptNo.prefix %>">
+                        </div>
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label">Format</label>
+                            <select name="receipt_no_format" class="form-select">
+                                <option value="sequential" <%= receiptNo.format==='sequential' ? 'selected' : '' %>>
+                                    Sequential (PREFIX-0001, PREFIX-0002... never resets)
+                                </option>
+                                <option value="yearly_reset" <%= receiptNo.format==='yearly_reset' ? 'selected' : '' %>>
+                                    Year + Sequence, resets each year (PREFIX-2026-0001)
+                                </option>
+                                <option value="yearly_continuous" <%= receiptNo.format==='yearly_continuous' ? 'selected' : '' %>>
+                                    Year + Sequence, never resets (PREFIX-2026-0001, keeps counting)
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Digits</label>
+                            <input type="number" name="receipt_no_digits" class="form-control" min="1" max="8" value="<%= receiptNo.digits %>">
+                        </div>
+                    </div>
+
+                    <p class="small text-muted">
+                        Next receipt number: <strong><%= receiptNo.preview %></strong>
+                        (increments automatically each time a payment is recorded - changing the prefix or digits here won't reset the counter itself).
+                    </p>
+
+                    <button class="btn btn-primary" type="submit">Save</button>
+                </form>
+
+            </div>
+        </div>
+    <div class="col-md-7 mt-4">
+        <div class="card shadow">
             <div class="card-header bg-primary text-white"><h5>Attendance</h5></div>
             <div class="card-body">
 

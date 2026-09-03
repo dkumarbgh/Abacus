@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
-const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, getDefaultHoursAttended } = require("../services/schoolSettings");
+const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, getDefaultHoursAttended, getReceiptNoSettings } = require("../services/schoolSettings");
 
 router.use(requireLogin);
 
@@ -33,11 +33,14 @@ router.get("/", requireRole("Admin"), (req, res) => {
 
                     return getAdmissionNoSettings(schoolId).then(admissionNo => {
                         return getDefaultHoursAttended(schoolId).then(defaultHoursAttended => {
-                            res.render("settings", {
-                                simpleFeeMode: !!(school && school.simple_fee_mode),
-                                studentFields,
-                                admissionNo,
-                                defaultHoursAttended
+                            return getReceiptNoSettings(schoolId).then(receiptNo => {
+                                res.render("settings", {
+                                    simpleFeeMode: !!(school && school.simple_fee_mode),
+                                    studentFields,
+                                    admissionNo,
+                                    defaultHoursAttended,
+                                    receiptNo
+                                });
                             });
                         });
                     });
@@ -141,6 +144,29 @@ router.post("/attendance", requireRole("Admin"), (req, res) => {
     db.run(
         "UPDATE schools SET default_hours_attended=? WHERE id=?",
         [hours, req.schoolId],
+        (err) => {
+            if (err) return res.send(err.message);
+            res.redirect("/settings");
+        }
+    );
+
+});
+
+/* ==========================================
+   UPDATE RECEIPT NUMBER FORMAT (Admin only)
+========================================== */
+router.post("/receipt-no", requireRole("Admin"), (req, res) => {
+
+    const prefix = (req.body.receipt_no_prefix || "RCPT").trim() || "RCPT";
+    const format = ["sequential", "yearly_reset", "yearly_continuous"].includes(req.body.receipt_no_format)
+        ? req.body.receipt_no_format
+        : "sequential";
+    const digitsRaw = parseInt(req.body.receipt_no_digits);
+    const digits = isNaN(digitsRaw) ? 4 : Math.max(1, Math.min(8, digitsRaw));
+
+    db.run(
+        "UPDATE schools SET receipt_no_prefix=?, receipt_no_format=?, receipt_no_digits=? WHERE id=?",
+        [prefix, format, digits, req.schoolId],
         (err) => {
             if (err) return res.send(err.message);
             res.redirect("/settings");

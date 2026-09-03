@@ -15,11 +15,11 @@
 <% } %>
 
 <form method="GET" action="/reports/attendance-regularity" class="row g-2 mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label small mb-0">Month</label>
         <input type="month" name="month" class="form-control" value="<%= month %>">
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label small mb-0">Level</label>
         <select name="level_id" class="form-select">
             <option value="">All Levels</option>
@@ -28,7 +28,7 @@
             <% }) %>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <label class="form-label small mb-0">Batch</label>
         <select name="batch_id" class="form-select">
             <option value="">All Batches</option>
@@ -39,7 +39,25 @@
             <% }) %>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Standard/Class</label>
+        <select name="class_id" class="form-select">
+            <option value="">All Classes</option>
+            <% classes.forEach(function(c) { %>
+                <option value="<%= c.id %>" <%= String(selectedClass)===String(c.id) ? "selected" : "" %>><%= c.class_name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-0">Branch/Centre</label>
+        <select name="branch_id" class="form-select">
+            <option value="">All Branches</option>
+            <% branches.forEach(function(b) { %>
+                <option value="<%= b.id %>" <%= String(selectedBranch)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
         <label class="form-label small mb-0">Student Name</label>
         <input type="text" name="student_name" class="form-control" placeholder="Search by name..." value="<%= studentName %>">
     </div>
@@ -82,17 +100,19 @@
 
 <table class="table table-bordered table-hover">
     <thead class="table-dark">
-        <tr><th>Student</th><th>Level</th><th>Batch</th><th>Attended</th><th>Expected</th><th>%</th><th>Status</th></tr>
+        <tr><th>Student</th><th>Level</th><th>Batch</th><th>Standard/Class</th><th>Branch/Centre</th><th>Attended</th><th>Expected</th><th>%</th><th>Status</th></tr>
     </thead>
     <tbody>
         <% if (rows.length === 0) { %>
-            <tr><td colspan="7" class="text-center">No students match these filters.</td></tr>
+            <tr><td colspan="9" class="text-center">No students match these filters.</td></tr>
         <% } %>
         <% rows.forEach(function(r) { %>
             <tr class="<%= r.status === 'Irregular' ? 'table-danger' : '' %>">
                 <td><a href="/reports/student/<%= r.id %>"><%= r.name %></a></td>
                 <td><%= r.level_name || '-' %></td>
                 <td><%= r.batch_name || '-' %></td>
+                <td><%= r.class_name || '-' %></td>
+                <td><%= r.branch_name || '-' %></td>
                 <td><%= r.expected == null ? '-' : r.attended %></td>
                 <td><%= r.expected == null ? '-' : r.expected %></td>
                 <td><%= r.pct == null ? '-' : r.pct + '%' %></td>

@@ -1,7 +1,10 @@
 <%- include("../partials/header") %>
 <%- include("../partials/superAdminNav") %>
 
-<h2>All Registered Schools</h2>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h2>All Registered Schools</h2>
+    <a href="/super-admin/schools/new" class="btn btn-success">➕ Create New School</a>
+</div>
 <p class="text-muted">Every school registered on this deployment, with its user and student counts.</p>
 
 <table class="table table-bordered table-hover">

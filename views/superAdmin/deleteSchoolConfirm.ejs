@@ -1,0 +1,58 @@
+<%- include("../partials/header") %>
+<%- include("../partials/superAdminNav") %>
+
+<a href="/super-admin/schools/<%= school.id %>" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to <%= school.name %></a>
+
+<div class="card shadow border-danger">
+    <div class="card-header bg-danger text-white"><h5 class="mb-0">⚠️ Delete School: <%= school.name %></h5></div>
+    <div class="card-body">
+
+        <% if (error) { %>
+            <div class="alert alert-danger"><%= error %></div>
+        <% } %>
+
+        <p class="text-danger">
+            <strong>This permanently deletes this school and everything in it.</strong>
+            There is no undo button - the only way back is restoring the automatic safety
+            snapshot that gets taken right before the delete (from Backup &amp; Restore),
+            which replaces the <em>entire</em> database, not just this school.
+        </p>
+
+        <% if (counts.length === 0) { %>
+            <p class="text-muted">This school has no data in it yet - deleting it just removes the school record itself.</p>
+        <% } else { %>
+            <p>This will delete:</p>
+            <ul>
+                <% counts.forEach(function(c) { %>
+                    <li><strong><%= c.count %></strong> <%= c.label %></li>
+                <% }) %>
+            </ul>
+        <% } %>
+
+        <form method="POST" action="/super-admin/schools/<%= school.id %>/delete" id="deleteSchoolForm">
+            <div class="mb-3">
+                <label class="form-label">Type the school's name (<code><%= school.name %></code>) to confirm</label>
+                <input type="text" name="confirm_name" id="confirmName" class="form-control" autocomplete="off" required>
+            </div>
+            <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>Permanently Delete This School</button>
+            <a href="/super-admin/schools/<%= school.id %>" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+
+    </div>
+</div>
+
+<script>
+const schoolName = <%- JSON.stringify(school.name) %>;
+const confirmName = document.getElementById('confirmName');
+const deleteBtn = document.getElementById('deleteBtn');
+confirmName.addEventListener('input', () => {
+    deleteBtn.disabled = confirmName.value.trim() !== schoolName;
+});
+document.getElementById('deleteSchoolForm').addEventListener('submit', function(e) {
+    if (!confirm('This permanently deletes "' + schoolName + '" and everything in it. Are you absolutely sure?')) {
+        e.preventDefault();
+    }
+});
+</script>
+
+<%- include("../partials/footer") %>

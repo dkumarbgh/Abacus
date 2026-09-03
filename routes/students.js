@@ -81,12 +81,29 @@ function getLookupLists(schoolId) {
 // (class_id, photo, fee/installments) - listed once here so the INSERT/
 // UPDATE statements below don't have to spell out 25+ columns by hand.
 const EXTENDED_FIELDS = [
-    "admission_no", "gender", "dob", "guardian_name", "guardian_phone", "guardian_email", "address", "fee_due_date",
+    "admission_no", "gender", "dob", "guardian_name", "guardian_phone", "guardian_phone_2", "guardian_email", "address", "fee_due_date",
     "mother_tongue", "mother_name", "father_name", "mother_occupation", "father_occupation",
     "mother_phone", "father_phone", "mother_email", "father_email",
     "previous_school", "stream", "standard", "religion", "nationality", "country", "state", "city",
     "total_hours_per_month", "course_id", "batch_id", "level_id", "branch_id"
 ];
+
+// Server-side fallback for Age auto-calculation from Date of Birth, in case
+// the browser's JS-driven auto-fill didn't run (e.g. bulk import, or JS
+// disabled). If a valid DOB is present, it always wins over a hand-typed
+// Age so the two fields can't drift apart.
+function computeAgeFromDob(dobStr) {
+    if (!dobStr) return null;
+    const dob = new Date(dobStr);
+    if (isNaN(dob.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    return age >= 0 ? age : null;
+}
 
 /* =====================================================
    STUDENT LIST
@@ -317,7 +334,39 @@ router.post("/import", uploadSpreadsheet.single("file"), async (req, res) => {
             return created;
         }
 
+        // Re-importing the same sheet (e.g. an updated master list) should
+        // update existing students instead of creating duplicates. A row
+        // matches an existing student by Roll Number first (the most
+        // reliable identifier when present); if the row has no Roll
+        // Number, it falls back to an exact Name match instead - but only
+        // when that name is unambiguous (exactly one existing student has
+        // it), since guessing wrong would silently overwrite the wrong
+        // student's record.
+        async function findExistingMatch(admissionNoValue, nameValue) {
+            if (admissionNoValue && admissionNoValue.trim()) {
+                const row = await new Promise((resolve, reject) => {
+                    db.get(
+                        "SELECT id FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))",
+                        [schoolId, admissionNoValue],
+                        (err, r) => err ? reject(err) : resolve(r)
+                    );
+                });
+                if (row) return { id: row.id, ambiguous: false };
+                // Fall through to name matching only if NOTHING matched
+                // this Roll Number - a typo'd Roll Number shouldn't
+                // silently fall back and update a different student.
+            }
+            const nameMatches = await dbAll(
+                "SELECT id FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))",
+                [schoolId, nameValue]
+            );
+            if (nameMatches.length === 1) return { id: nameMatches[0].id, ambiguous: false };
+            if (nameMatches.length > 1) return { id: null, ambiguous: true };
+            return { id: null, ambiguous: false };
+        }
+
         let imported = 0;
+        let updated = 0;
         const rowErrors = [];
 
         for (let rowNum = 2; rowNum <= sheet.rowCount; rowNum++) {
@@ -338,8 +387,9 @@ router.post("/import", uploadSpreadsheet.single("file"), async (req, res) => {
 
             const rowData = {};
             EXTENDED_FIELDS.forEach(key => { rowData[key] = cell(key); });
-            const age = cell("age");
-            rowData.age = age; // age isn't in EXTENDED_FIELDS (handled specially, like name/class_id) but IS a configurable mandatory field, so the validation loop below needs to see it too
+            const computedAge = computeAgeFromDob(rowData.dob);
+            const age = computedAge != null ? computedAge : cell("age");
+            rowData.age = age; // age isn't in EXTENDED_FIELDS (handled specially, like name/class_id) but IS a configurable mandatory field, so the validation loop below needs to see it too - DOB (if present in the sheet) always wins over a typed Age column
 
             // Class must already exist.
             const className = cell("class_name");
@@ -363,6 +413,17 @@ router.post("/import", uploadSpreadsheet.single("file"), async (req, res) => {
                 continue;
             }
 
+            // Figure out BEFORE resolving anything else whether this row
+            // is actually an existing student, so admission-number
+            // auto-assignment below only ever applies to genuinely new
+            // students (an update should never get handed a fresh Roll
+            // Number just because the re-imported row left it blank).
+            const match = await findExistingMatch(rowData.admission_no, name);
+            if (match.ambiguous) {
+                rowErrors.push(`Row ${rowNum} (${name}): more than one existing student is named "${name}" - add a Roll Number to this row to say which one to update.`);
+                continue;
+            }
+
             // Resolve dropdown names to IDs, auto-creating new list entries as needed.
             rowData.course_id = await resolveLookup("course", cell("course_name"));
             rowData.batch_id = await resolveLookup("batch", cell("batch_name"));
@@ -370,27 +431,49 @@ router.post("/import", uploadSpreadsheet.single("file"), async (req, res) => {
             rowData.branch_id = await resolveLookup("branch", cell("branch_name"));
 
             // Admission No.: use the sheet's value if given; otherwise
-            // auto-assign if that's turned on for this school.
-            if (!rowData.admission_no && admissionNo.auto) {
+            // auto-assign if that's turned on for this school - but only
+            // for a brand new student (see comment above).
+            if (!match.id && !rowData.admission_no && admissionNo.auto) {
                 rowData.admission_no = await assignNextAdmissionNo(schoolId);
             }
 
-            const columns = ["name", "age", "class_id", ...EXTENDED_FIELDS, "school_id"];
-            const values = [name, age || null, classId, ...EXTENDED_FIELDS.map(f => rowData[f] || null), schoolId];
-            const placeholders = columns.map(() => "?").join(",");
+            if (match.id) {
+                // UPDATE an existing student - the sheet is treated as the
+                // source of truth for every column it defines, including
+                // blanks (a blank cell clears that field, same as it would
+                // from the Edit Student form).
+                const setClauses = ["name=?", "age=?", "class_id=?", ...EXTENDED_FIELDS.map(f => `${f}=?`)];
+                const values = [name, age || null, classId, ...EXTENDED_FIELDS.map(f => rowData[f] || null), match.id, schoolId];
 
-            await new Promise((resolve, reject) => {
-                db.run(`INSERT INTO students (${columns.join(",")}) VALUES(${placeholders})`, values, function(err) {
-                    if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(); }
-                    imported++;
-                    resolve();
+                await new Promise((resolve) => {
+                    db.run(
+                        `UPDATE students SET ${setClauses.join(",")} WHERE id=? AND school_id=?`,
+                        values,
+                        function(err) {
+                            if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(); }
+                            updated++;
+                            resolve();
+                        }
+                    );
                 });
-            });
+            } else {
+                const columns = ["name", "age", "class_id", ...EXTENDED_FIELDS, "school_id"];
+                const values = [name, age || null, classId, ...EXTENDED_FIELDS.map(f => rowData[f] || null), schoolId];
+                const placeholders = columns.map(() => "?").join(",");
+
+                await new Promise((resolve) => {
+                    db.run(`INSERT INTO students (${columns.join(",")}) VALUES(${placeholders})`, values, function(err) {
+                        if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(); }
+                        imported++;
+                        resolve();
+                    });
+                });
+            }
 
         }
 
         res.render("importStudents", {
-            result: { imported, rowErrors, total: sheet.rowCount - 1 }
+            result: { imported, updated, rowErrors, total: sheet.rowCount - 1 }
         });
 
     } catch (e) {
@@ -488,9 +571,10 @@ router.post("/add", upload.single("photo"), (req, res) => {
 
         req.body.admission_no = admissionNoValue;
 
+        const computedAge = computeAgeFromDob(req.body.dob);
         const columns = ["name", "age", "class_id", ...EXTENDED_FIELDS, "photo_path", "school_id"];
         const values = [
-            name, age, class_id,
+            name, computedAge != null ? computedAge : (age || null), class_id,
             ...EXTENDED_FIELDS.map(f => req.body[f] || null),
             photo_path, schoolId
         ];
@@ -658,8 +742,9 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
             }).catch(err => res.send(err.message));
         }
 
+        const computedAge = computeAgeFromDob(req.body.dob);
         const setClauses = ["name=?", "age=?", "class_id=?", ...EXTENDED_FIELDS.map(f => `${f}=?`)];
-        const params = [name, age, class_id, ...EXTENDED_FIELDS.map(f => req.body[f] || null)];
+        const params = [name, computedAge != null ? computedAge : (age || null), class_id, ...EXTENDED_FIELDS.map(f => req.body[f] || null)];
 
         if (req.file) {
             setClauses.push("photo_path=?");

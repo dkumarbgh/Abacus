@@ -24,6 +24,14 @@
                         Total Fee / Discount / Installments aren't handled by import - add those
                         individually from each student's Edit page afterwards, if needed.
                     </li>
+                    <li>
+                        Re-uploading a sheet won't create duplicates: a row updates an existing student
+                        instead of adding a new one if its <strong>Roll Number</strong> matches, or (when the
+                        Roll Number is blank) if its <strong>Name</strong> exactly matches exactly one existing
+                        student. On an update, the sheet is the source of truth for every column, including
+                        blanks - so leaving a cell empty clears that field on the existing student, same as
+                        clearing it on the Edit Student page would.
+                    </li>
                 </ol>
 
                 <% if (result && result.error) { %>
@@ -32,7 +40,9 @@
 
                 <% if (result && typeof result.imported !== 'undefined') { %>
                     <div class="alert <%= result.rowErrors.length ? 'alert-warning' : 'alert-success' %>">
-                        Imported <strong><%= result.imported %></strong> of <%= result.total %> row<%= result.total===1?'':'s' %>.
+                        <strong><%= result.imported %></strong> new student<%= result.imported===1?'':'s' %> added,
+                        <strong><%= result.updated %></strong> existing student<%= result.updated===1?'':'s' %> updated,
+                        out of <%= result.total %> row<%= result.total===1?'':'s' %>.
                         <% if (result.rowErrors.length) { %>
                             <%= result.rowErrors.length %> row<%= result.rowErrors.length===1?'':'s' %> skipped - see below.
                         <% } %>
