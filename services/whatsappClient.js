@@ -140,7 +140,27 @@ const client = new Client({
             // don't have /dev/shm sized generously enough for Chrome's
             // default usage, which causes silent crashes rather than a
             // clear error - this flag avoids that class of failure.
-            "--disable-dev-shm-usage"
+            "--disable-dev-shm-usage",
+            // The flags below all trim Chrome's memory footprint. This
+            // matters a lot here: Node's own view of "available memory"
+            // (see getDiagnostics() above) reads the underlying HOST
+            // machine's stats, not the actual, usually much smaller,
+            // memory limit a container/hosting plan enforces - so a
+            // number like "44GB free" can be shown right before Chrome
+            // gets killed by the real (invisible-to-Node) limit. A full
+            // multi-process Chrome easily uses several hundred MB; these
+            // flags are the standard mitigation on RAM-constrained hosts.
+            "--single-process",       // biggest win: one process instead of Chrome's normal multi-process model
+            "--disable-gpu",
+            "--disable-extensions",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-sync",
+            "--disable-translate",
+            "--mute-audio",
+            "--no-first-run",
+            "--no-zygote",
+            "--metrics-recording-only"
         ]
     }
 });
