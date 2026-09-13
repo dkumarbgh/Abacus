@@ -1,0 +1,43 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="container mt-4">
+
+    <a href="/settings" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to Settings</a>
+
+    <h2>✏️ Customize Screen Text</h2>
+    <p class="text-muted">
+        Override the wording used anywhere on-screen (currently showing defaults for
+        <strong><%= language === 'kn' ? 'ಕನ್ನಡ (Kannada)' : 'English' %></strong>).
+        Leave a field blank to use the language default shown as its placeholder.
+        Only screens that have been converted to this system appear below - more are being
+        added over time.
+    </p>
+
+    <form method="POST" action="/settings/labels">
+
+        <% groupList.forEach(function(g) { %>
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0 text-capitalize"><%= g.group %></h6>
+                </div>
+                <div class="card-body">
+                    <% g.keys.forEach(function(k) { %>
+                        <div class="row mb-2 align-items-center">
+                            <label class="col-md-4 col-form-label small text-muted"><%= k.key %></label>
+                            <div class="col-md-8">
+                                <input type="text" name="<%= k.key %>" class="form-control"
+                                       placeholder="<%= k.defaultText %>" value="<%= k.overrideText %>">
+                            </div>
+                        </div>
+                    <% }) %>
+                </div>
+            </div>
+        <% }) %>
+
+        <button class="btn btn-primary" type="submit">Save All Changes</button>
+    </form>
+
+</div>
+
+<%- include("partials/footer") %>

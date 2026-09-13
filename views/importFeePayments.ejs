@@ -1,0 +1,71 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4><%= t('fees.import_button') %></h4>
+            </div>
+            <div class="card-body">
+
+                <ol>
+                    <li>
+                        <a href="/fee-payments/import/template">⬇ Download the template</a>
+                        (an Excel file with the right column headers and one example row).
+                    </li>
+                    <li>Fill in one row per payment, save it, then upload it below.</li>
+                    <li>
+                        <strong>Fee Category</strong> and <strong>Academic Year</strong> must already exist as a
+                        Fee Structure item for that student's Class (set up under Fees first) - a mismatch will
+                        cause that row to be skipped.
+                    </li>
+                    <li>
+                        Unlike Student import, this always adds new payment records rather than updating
+                        existing ones - a fee payment is a historical record, not something that makes sense
+                        to "edit" via re-import. To avoid double-counting on a re-upload, a row is skipped as a
+                        likely duplicate if a matching payment (same student, fee, date and amount) already exists.
+                    </li>
+                    <li>
+                        Leave <strong>Receipt No.</strong> blank to have one auto-assigned using this school's
+                        configured format (Settings &gt; Receipt Number Format) - or fill it in yourself when
+                        migrating historical receipt numbers from a previous system.
+                    </li>
+                </ol>
+
+                <% if (result && result.error) { %>
+                    <div class="alert alert-danger"><%= result.error %></div>
+                <% } %>
+
+                <% if (result && typeof result.imported !== 'undefined') { %>
+                    <div class="alert <%= result.rowErrors.length ? 'alert-warning' : 'alert-success' %>">
+                        <strong><%= result.imported %></strong> payment<%= result.imported===1?'':'s' %> added,
+                        <strong><%= result.skippedDuplicates %></strong> skipped as likely duplicate<%= result.skippedDuplicates===1?'':'s' %>,
+                        out of <%= result.total %> row<%= result.total===1?'':'s' %>.
+                        <% if (result.rowErrors.length) { %>
+                            <%= result.rowErrors.length %> row<%= result.rowErrors.length===1?'':'s' %> skipped - see below.
+                        <% } %>
+                    </div>
+                    <% if (result.rowErrors.length) { %>
+                        <ul class="small text-danger">
+                            <% result.rowErrors.forEach(function(msg){ %>
+                                <li><%= msg %></li>
+                            <% }) %>
+                        </ul>
+                    <% } %>
+                <% } %>
+
+                <form action="/fee-payments/import" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Filled-in file (.xlsx)</label>
+                        <input type="file" name="file" accept=".xlsx" class="form-control" required>
+                    </div>
+                    <button class="btn btn-success">Upload &amp; Import</button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("partials/footer") %>

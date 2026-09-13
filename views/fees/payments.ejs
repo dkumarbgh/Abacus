@@ -1,7 +1,14 @@
 <%- include("../partials/header") %>
 <%- include("../partials/navbar") %>
 
-<h2>Fee Collection</h2>
+<h2><%= t('fees.title') %></h2>
+
+<% if (typeof importExportEnabled !== 'undefined' && importExportEnabled && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin')) { %>
+    <div class="mb-3">
+        <a href="/fee-payments/import" class="btn btn-outline-success btn-sm"><%= t('fees.import_button') %></a>
+        <a href="/fee-payments/export" class="btn btn-outline-primary btn-sm"><%= t('fees.export_button') %></a>
+    </div>
+<% } %>
 
 <% if (students) { %>
 
@@ -12,18 +19,18 @@
                 <div class="col-md-6">
                     <form method="GET" action="/fee-payments">
                         <div class="input-group">
-                            <input type="text" name="search" class="form-control" placeholder="Search student by name..." value="<%= search %>">
+                            <input type="text" name="search" class="form-control" placeholder="<%= t('fees.search_by_name') %>" value="<%= search %>">
                             <input type="hidden" name="roll_number" value="<%= rollNumber %>">
-                            <button class="btn btn-primary">🔍 Search</button>
+                            <button class="btn btn-primary">🔍 <%= t('common.search') %></button>
                         </div>
                     </form>
                 </div>
                 <div class="col-md-6">
                     <form method="GET" action="/fee-payments">
                         <div class="input-group">
-                            <input type="text" name="roll_number" class="form-control" placeholder="Search by roll number..." value="<%= rollNumber %>">
+                            <input type="text" name="roll_number" class="form-control" placeholder="<%= t('fees.search_by_roll_no') %>" value="<%= rollNumber %>">
                             <input type="hidden" name="search" value="<%= search %>">
-                            <button class="btn btn-primary">🔍 Search</button>
+                            <button class="btn btn-primary">🔍 <%= t('common.search') %></button>
                         </div>
                     </form>
                 </div>
@@ -33,18 +40,18 @@
 
     <table class="table table-bordered table-hover">
         <thead class="table-dark">
-            <tr><th>Name</th><th>Roll No.</th><th>Level</th><th></th></tr>
+            <tr><th><%= t('common.name') %></th><th><%= t('attendance.roll_no') %></th><th><%= t('attendance.level') %></th><th></th></tr>
         </thead>
         <tbody>
             <% if (students.length === 0) { %>
-                <tr><td colspan="4" class="text-center">No students found</td></tr>
+                <tr><td colspan="4" class="text-center"><%= t('fees.no_students_found') %></td></tr>
             <% } %>
             <% students.forEach(s => { %>
                 <tr>
                     <td><%= s.name %></td>
                     <td><%= s.admission_no || "-" %></td>
                     <td><%= s.level_name || "-" %></td>
-                    <td><a href="/fee-payments/<%= s.id %>" class="btn btn-success btn-sm">Collect Fee</a></td>
+                    <td><a href="/fee-payments/<%= s.id %>" class="btn btn-success btn-sm"><%= t('fees.collect_fee') %></a></td>
                 </tr>
             <% }) %>
         </tbody>
@@ -55,9 +62,9 @@
     <!-- Dues + payment form for a single student -->
     <div class="card shadow mb-4">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><%= student.name %> &mdash; Fee Dues</h5>
+            <h5 class="mb-0"><%= student.name %> &mdash; <%= t('fees.fee_dues_heading') %></h5>
             <% if (simpleFeeMode) { %>
-                <span class="badge bg-warning text-dark">Simple Fee Mode: Paid / Not Paid only</span>
+                <span class="badge bg-warning text-dark"><%= t('fees.simple_mode_badge') %></span>
             <% } %>
         </div>
         <div class="card-body">
@@ -66,26 +73,27 @@
                 <thead class="table-dark">
                     <tr>
                         <% if (simpleFeeMode) { %>
-                            <th>Fee</th><th>Academic Year</th><th>Status</th><th width="230">Action</th>
+                            <th><%= t('fees.fee') %></th><th><%= t('fees.academic_year') %></th><th><%= t('common.status') %></th><th width="230"><%= t('fees.action') %></th>
                         <% } else { %>
-                            <th>Fee</th><th>Academic Year</th><th>Total</th><th>Discount</th><th>Net</th><th>Paid</th><th>Due</th><th width="230">Action</th>
+                            <th><%= t('fees.fee') %></th><th><%= t('fees.academic_year') %></th><th><%= t('fees.total') %></th><th><%= t('fees.discount') %></th><th><%= t('fees.net') %></th><th><%= t('fees.paid') %></th><th><%= t('fees.due') %></th><th width="230"><%= t('fees.action') %></th>
                         <% } %>
                     </tr>
                 </thead>
                 <tbody>
                     <% if (dues.length === 0) { %>
-                        <tr><td colspan="<%= simpleFeeMode ? 4 : 8 %>" class="text-center">No fee structure defined for this class yet. Set one up under Fee Structure.</td></tr>
+                        <tr><td colspan="<%= simpleFeeMode ? 4 : 8 %>" class="text-center"><%= t('fees.no_fee_structure') %></td></tr>
                     <% } %>
                     <% dues.forEach(d => { %>
+                        <% const displayName = d.fee_name + (d.installment_label ? ' - ' + d.installment_label : ''); %>
                         <tr class="<%= d.due > 0 ? 'table-warning' : 'table-success' %>">
-                            <td><%= d.fee_name %></td>
+                            <td><%= displayName %></td>
                             <td><%= d.academic_year %></td>
                             <% if (simpleFeeMode) { %>
                                 <td>
                                     <% if (d.due > 0) { %>
-                                        <span class="badge bg-danger">Not Paid</span>
+                                        <span class="badge bg-danger"><%= t('fees.not_paid_badge') %></span>
                                     <% } else { %>
-                                        <span class="badge bg-success">Paid</span>
+                                        <span class="badge bg-success"><%= t('fees.paid_badge') %></span>
                                     <% } %>
                                 </td>
                             <% } else { %>
@@ -104,7 +112,7 @@
                                         <% } %>
                                         <a href="/fee-payments/discount/remove/<%= d.discount.id %>"
                                            class="small text-danger"
-                                           onclick="return confirm('Remove this discount?')">remove</a>
+                                           onclick="return confirm('Remove this discount?')"><%= t('fees.remove_discount') %></a>
                                     <% } else { %>
                                         <span class="text-muted">&mdash;</span>
                                     <% } %>
@@ -129,21 +137,21 @@
                                             <input type="text" name="reference_no" class="form-control form-control-sm"
                                                    placeholder="UTR / Cheque No. (optional)" style="width: 170px;">
                                             <button class="btn btn-sm btn-success" type="submit"
-                                                    onclick="return confirm('Mark \'<%= d.fee_name %>\' as fully PAID?')">✅ Mark Paid</button>
+                                                    onclick="return confirm('Mark \'<%= displayName %>\' as fully PAID?')"><%= t('fees.mark_paid') %></button>
                                         </form>
                                     <% } else { %>
                                         <button class="btn btn-sm btn-success" type="button"
-                                            onclick="payFee(<%= d.id %>, '<%= d.fee_name %>', <%= d.due %>)">
-                                            Collect
+                                            onclick="payFee(<%= d.id %>, '<%= displayName %>', <%= d.due %>)">
+                                            <%= t('fees.collect') %>
                                         </button>
                                     <% } %>
                                 <% } else { %>
-                                    <span class="badge bg-success">Paid</span>
+                                    <span class="badge bg-success"><%= t('fees.paid_badge') %></span>
                                 <% } %>
                                 <% if (!simpleFeeMode) { %>
                                     <button class="btn btn-sm btn-outline-info" type="button"
-                                        onclick="discountFee(<%= d.id %>, '<%= d.fee_name %>')">
-                                        Discount/Waive
+                                        onclick="discountFee(<%= d.id %>, '<%= displayName %>')">
+                                        <%= t('fees.discount_waive') %>
                                     </button>
                                 <% } %>
                             </td>
@@ -160,7 +168,7 @@
     <% if (!simpleFeeMode) { %>
     <div class="card shadow mb-4" id="payCard" style="display:none">
         <div class="card-header bg-success text-white">
-            <h5>Record Payment &mdash; <span id="payFeeName"></span></h5>
+            <h5><%= t('fees.record_payment') %> &mdash; <span id="payFeeName"></span></h5>
         </div>
         <div class="card-body">
             <form action="/fee-payments/pay" method="POST">
@@ -169,11 +177,11 @@
 
                 <div class="row">
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Amount</label>
+                        <label class="form-label"><%= t('fees.amount') %></label>
                         <input type="number" step="0.01" name="amount_paid" id="payAmount" class="form-control" required>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Mode</label>
+                        <label class="form-label"><%= t('fees.mode') %></label>
                         <select name="mode" class="form-select">
                             <option>Cash</option>
                             <option>UPI</option>
@@ -183,16 +191,16 @@
                         </select>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Reference No.</label>
+                        <label class="form-label"><%= t('fees.reference_no') %></label>
                         <input type="text" name="reference_no" class="form-control" placeholder="UTR / Cheque No. / Txn ID">
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Remarks</label>
+                        <label class="form-label"><%= t('fees.remarks') %></label>
                         <input type="text" name="remarks" class="form-control">
                     </div>
                 </div>
 
-                <button class="btn btn-success">Save Payment & Notify Guardian on WhatsApp</button>
+                <button class="btn btn-success"><%= t('fees.save_payment') %></button>
             </form>
         </div>
     </div>
@@ -202,7 +210,7 @@
     <% if (!simpleFeeMode) { %>
     <div class="card shadow mb-4" id="discountCard" style="display:none">
         <div class="card-header bg-info text-dark">
-            <h5>Discount / Waiver &mdash; <span id="discountFeeName"></span></h5>
+            <h5><%= t('fees.discount_waive') %> &mdash; <span id="discountFeeName"></span></h5>
         </div>
         <div class="card-body">
             <form action="/fee-payments/discount" method="POST">
@@ -211,26 +219,26 @@
 
                 <div class="row">
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Type</label>
+                        <label class="form-label"><%= t('fees.discount_type') %></label>
                         <select name="discount_type" class="form-select">
                             <option value="FLAT">Flat Amount (₹)</option>
                             <option value="PERCENT">Percentage (%)</option>
                         </select>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Value</label>
+                        <label class="form-label"><%= t('fees.discount_value') %></label>
                         <input type="number" step="0.01" name="discount_value" class="form-control">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Reason</label>
+                        <label class="form-label"><%= t('fees.discount_reason') %></label>
                         <input type="text" name="reason" class="form-control" placeholder="e.g. Sibling discount, scholarship, staff ward">
                     </div>
                 </div>
 
-                <button class="btn btn-info">Apply Discount</button>
+                <button class="btn btn-info"><%= t('fees.apply_discount') %></button>
                 <button class="btn btn-outline-danger" type="submit" name="waive_full" value="1"
                         onclick="return confirm('Waive the FULL remaining amount for this fee item?')">
-                    Waive Full Amount
+                    <%= t('fees.waive_full') %>
                 </button>
             </form>
         </div>
@@ -258,22 +266,22 @@
     <!-- Payment history -->
     <div class="card shadow">
         <div class="card-header bg-secondary text-white">
-            <h5>Payment History</h5>
+            <h5><%= t('fees.payment_history') %></h5>
         </div>
         <div class="card-body">
             <table class="table table-bordered">
                 <thead class="table-dark">
                     <tr>
                         <% if (simpleFeeMode) { %>
-                            <th>Date</th><th>Receipt No.</th><th>Mode</th><th>Reference No.</th><th>Remarks</th><th></th>
+                            <th><%= t('common.date') %></th><th><%= t('fees.receipt_no') %></th><th><%= t('fees.mode') %></th><th><%= t('fees.reference_no') %></th><th><%= t('fees.remarks') %></th><th></th>
                         <% } else { %>
-                            <th>Date</th><th>Receipt No.</th><th>Amount</th><th>Mode</th><th>Reference No.</th><th>Remarks</th><th></th>
+                            <th><%= t('common.date') %></th><th><%= t('fees.receipt_no') %></th><th><%= t('fees.amount') %></th><th><%= t('fees.mode') %></th><th><%= t('fees.reference_no') %></th><th><%= t('fees.remarks') %></th><th></th>
                         <% } %>
                     </tr>
                 </thead>
                 <tbody>
                     <% if (payments.length === 0) { %>
-                        <tr><td colspan="<%= simpleFeeMode ? 6 : 7 %>" class="text-center">No payments recorded yet</td></tr>
+                        <tr><td colspan="<%= simpleFeeMode ? 6 : 7 %>" class="text-center"><%= t('fees.no_payments') %></td></tr>
                     <% } %>
                     <% payments.forEach(p => { %>
                         <tr>
@@ -283,7 +291,7 @@
                             <td><%= p.mode %></td>
                             <td><%= p.reference_no || "-" %></td>
                             <td><%= p.remarks || "-" %></td>
-                            <td><a href="/reports/receipt/<%= p.id %>" class="btn btn-outline-primary btn-sm" target="_blank">🧾 Receipt PDF</a></td>
+                            <td><a href="/reports/receipt/<%= p.id %>" class="btn btn-outline-primary btn-sm" target="_blank"><%= t('fees.receipt_pdf') %></a></td>
                         </tr>
                     <% }) %>
                 </tbody>
@@ -291,7 +299,7 @@
         </div>
     </div>
 
-    <a href="/fee-payments" class="btn btn-link mt-3">&larr; Back to student search</a>
+    <a href="/fee-payments" class="btn btn-link mt-3"><%= t('fees.back_to_search') %></a>
 
 <% } %>
 

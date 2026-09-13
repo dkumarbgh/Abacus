@@ -23,9 +23,51 @@
                 Age: <%= student.age %>
             </div>
             <div class="text-muted">Guardian: <%= student.guardian_name || "-" %> (<%= student.guardian_phone || "-" %>)</div>
+            <% if (student.date_of_joining) { %>
+                <div class="text-muted small">Joined: <%= student.date_of_joining %></div>
+            <% } %>
         </div>
     </div>
 </div>
+
+<% if (feeSchedule.length > 0) { %>
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">📅 Payment Schedule Summary</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">
+            Each fee that's split into periods (Monthly, Bimonthly, Quarterly, Half-Yearly, or an
+            auto-assigned Fee Plan), at a glance. See Payment History below for exact payment dates.
+        </p>
+        <div class="row g-3 mb-3">
+            <% feeSchedule.forEach(function(sched) { %>
+                <div class="col-md-6">
+                    <div class="border rounded p-2 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong><%= sched.fee_name %></strong>
+                            <span class="badge <%= sched.paidCount === sched.totalCount ? 'bg-success' : (sched.paidCount > 0 ? 'bg-warning text-dark' : 'bg-danger') %>">
+                                <%= sched.paidCount %> / <%= sched.totalCount %> paid
+                            </span>
+                        </div>
+                        <% if (!simpleFeeMode) { %>
+                            <div class="small text-muted mb-2">₹<%= sched.totalPaid %> paid of ₹<%= sched.totalAmount %> total</div>
+                        <% } %>
+                        <% if (sched.nextDue) { %>
+                            <div class="small">
+                                <span class="text-danger">Next due:</span> <%= sched.nextDue.installment_label %>
+                                <% if (!simpleFeeMode) { %>(₹<%= sched.nextDue.due %>)<% } %>
+                            </div>
+                        <% } else { %>
+                            <div class="small text-success">All periods paid ✓</div>
+                        <% } %>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+    </div>
+</div>
+<% } %>
 
 <div class="row">
 
@@ -108,7 +150,7 @@
                             <% } %>
                             <% feeInfo.feeItems.forEach(f => { %>
                                 <tr class="<%= f.due > 0 ? 'table-warning' : '' %>">
-                                    <td><%= f.fee_name %></td>
+                                    <td><%= f.fee_name %><%= f.installment_label ? ' - ' + f.installment_label : '' %></td>
                                     <td>
                                         <% if (f.due > 0) { %>
                                             <span class="badge bg-danger">Not Paid</span>
@@ -130,7 +172,7 @@
                             <% } %>
                             <% feeInfo.feeItems.forEach(f => { %>
                                 <tr class="<%= f.due > 0 ? 'table-warning' : '' %>">
-                                    <td><%= f.fee_name %></td>
+                                    <td><%= f.fee_name %><%= f.installment_label ? ' - ' + f.installment_label : '' %></td>
                                     <td>₹<%= f.amount %></td>
                                     <td>
                                         <% if (f.discount) { %>
@@ -150,7 +192,40 @@
                         </tbody>
                     </table>
                 <% } %>
-                <a href="/fee-payments/<%= student.id %>" class="btn btn-sm btn-success no-print">Collect Fee</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Payment History</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Date</th><th>Fee</th>
+                            <% if (!simpleFeeMode) { %><th>Amount</th><% } %>
+                            <th>Mode</th><th>Receipt No.</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (paymentHistory.length === 0) { %>
+                            <tr><td colspan="<%= simpleFeeMode ? 5 : 6 %>" class="text-center">No payments recorded yet</td></tr>
+                        <% } %>
+                        <% paymentHistory.forEach(p => { %>
+                            <tr>
+                                <td><%= p.payment_date %></td>
+                                <td><%= p.fee_name %><%= p.installment_label ? ' - ' + p.installment_label : '' %></td>
+                                <% if (!simpleFeeMode) { %><td>₹<%= p.amount_paid %></td><% } %>
+                                <td><%= p.mode %></td>
+                                <td><%= p.receipt_no %></td>
+                                <td><a href="/reports/receipt/<%= p.id %>" class="btn btn-outline-primary btn-sm no-print" target="_blank">🧾</a></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

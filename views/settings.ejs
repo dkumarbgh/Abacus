@@ -86,6 +86,8 @@
 
             </div>
         </div>
+    </div>
+
     <div class="col-md-7 mt-4">
         <div class="card shadow">
             <div class="card-header bg-primary text-white"><h5>Roll Number</h5></div>
@@ -120,6 +122,8 @@
 
             </div>
         </div>
+    </div>
+
     <div class="col-md-7 mt-4">
         <div class="card shadow">
             <div class="card-header bg-primary text-white"><h5>Receipt Number Format</h5></div>
@@ -161,6 +165,8 @@
 
             </div>
         </div>
+    </div>
+
     <div class="col-md-7 mt-4">
         <div class="card shadow">
             <div class="card-header bg-primary text-white"><h5>Attendance</h5></div>
@@ -182,6 +188,8 @@
 
             </div>
         </div>
+    </div>
+
     <div class="col-md-7 mt-4">
         <div class="card shadow">
             <div class="card-header bg-dark text-white"><h5>Backup</h5></div>
@@ -193,6 +201,57 @@
                     disk isn't persistent, this is your real backup.
                 </p>
                 <a href="/settings/backup" class="btn btn-dark">⬇ Download Full Database Backup</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7 mt-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5>Language &amp; Screen Text</h5></div>
+            <div class="card-body">
+                <form action="/settings/language" method="POST" class="row g-2 align-items-end mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">App Language</label>
+                        <select name="language" class="form-select">
+                            <option value="en" <%= language==='en' ? 'selected' : '' %>>English</option>
+                            <option value="kn" <%= language==='kn' ? 'selected' : '' %>>ಕನ್ನಡ (Kannada)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-primary" type="submit">Save Language</button>
+                    </div>
+                </form>
+                <p class="text-muted small">
+                    Screens are being converted to support this over time - anything not yet
+                    converted still shows in English regardless of this setting.
+                </p>
+                <a href="/settings/labels" class="btn btn-outline-primary">✏️ Customize Screen Text</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7 mt-4">
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white"><h5>Import / Export Features</h5></div>
+            <div class="card-body">
+                <p class="text-muted">
+                    These are off by default. Turn on Import/Export for Attendance and/or Fee
+                    Payments if your school wants to bulk-load or download records the same way
+                    the Students list already does.
+                </p>
+                <form action="/settings/import-export-toggles" method="POST">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="attImpExp"
+                               name="attendance_import_export_enabled" <%= attendanceImportExportEnabled ? "checked" : "" %>>
+                        <label class="form-check-label" for="attImpExp">Attendance Import/Export</label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="feesImpExp"
+                               name="fees_import_export_enabled" <%= feesImportExportEnabled ? "checked" : "" %>>
+                        <label class="form-check-label" for="feesImpExp">Fee Payments Import/Export</label>
+                    </div>
+                    <button class="btn btn-secondary" type="submit">Save</button>
+                </form>
             </div>
         </div>
     </div>

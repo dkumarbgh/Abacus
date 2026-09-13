@@ -4,7 +4,33 @@ const db = require("../config/database");
 const multer = require("multer");
 const path = require("path");
 const { getFaceEncoding } = require("../services/faceRecognition");
-const { requireLogin, requireFeature } = require("../middleware/auth");
+const { requireLogin, requireFeature, requireRole } = require("../middleware/auth");
+const { logChange } = require("../services/auditLog");
+const { assignExplicitOrActivePlans } = require("../services/feePlanGenerator");
+
+const PAYMENT_MODE_LABELS = { monthly: "Monthly", bimonthly: "Bimonthly", quarterly: "Quarterly", half_yearly: "Half-Yearly" };
+
+function getFeePlansForDropdown(schoolId) {
+    return new Promise((resolve, reject) => {
+        db.all(
+            `SELECT fee_plans.id, fee_plans.payment_mode, fee_plans.amount_per_period, fee_plans.academic_year,
+                    lv.name AS level_name, fc.fee_name
+             FROM fee_plans
+             LEFT JOIN lookup_items lv ON fee_plans.level_id = lv.id
+             JOIN fee_categories fc ON fee_plans.fee_category_id = fc.id
+             WHERE fee_plans.school_id=?
+             ORDER BY lv.name, fc.fee_name`,
+            [schoolId],
+            (err, rows) => {
+                if (err) return reject(err);
+                resolve(rows.map(r => ({
+                    ...r,
+                    label: `${r.level_name || "?"} - ${r.fee_name} - ${PAYMENT_MODE_LABELS[r.payment_mode] || r.payment_mode} - ₹${r.amount_per_period}/period`
+                })));
+            }
+        );
+    });
+}
 const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, assignNextAdmissionNo } = require("../services/schoolSettings");
 const { saveEnrollmentFee, parseInstallmentsFromBody } = require("../services/enrollmentFee");
 const ExcelJS = require("exceljs");
@@ -82,6 +108,7 @@ function getLookupLists(schoolId) {
 // UPDATE statements below don't have to spell out 25+ columns by hand.
 const EXTENDED_FIELDS = [
     "admission_no", "gender", "dob", "guardian_name", "guardian_phone", "guardian_phone_2", "guardian_email", "address", "fee_due_date",
+    "date_of_joining", "fee_plan_id",
     "mother_tongue", "mother_name", "father_name", "mother_occupation", "father_occupation",
     "mother_phone", "father_phone", "mother_email", "father_email",
     "previous_school", "stream", "standard", "religion", "nationality", "country", "state", "city",
@@ -164,7 +191,7 @@ router.get("/", (req, res) => {
 /* =====================================================
    EXPORT STUDENTS (Excel)
 ===================================================== */
-router.get("/export", (req, res) => {
+router.get("/export", requireRole("Admin", "SuperAdmin"), (req, res) => {
 
     const schoolId = req.schoolId;
 
@@ -207,7 +234,7 @@ router.get("/export", (req, res) => {
 /* =====================================================
    IMPORT TEMPLATE (blank, headers only)
 ===================================================== */
-router.get("/import/template", async (req, res) => {
+router.get("/import/template", requireRole("Admin", "SuperAdmin"), async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Students");
@@ -231,7 +258,7 @@ router.get("/import/template", async (req, res) => {
 /* =====================================================
    IMPORT PAGE
 ===================================================== */
-router.get("/import", (req, res) => {
+router.get("/import", requireRole("Admin", "SuperAdmin"), (req, res) => {
     res.render("importStudents", { result: null });
 });
 
@@ -248,7 +275,7 @@ router.get("/import", (req, res) => {
    Total Fee / Discount / Installments are NOT handled by import - add
    those individually from each student's Edit page after importing.
 ===================================================== */
-router.post("/import", uploadSpreadsheet.single("file"), async (req, res) => {
+router.post("/import", requireRole("Admin", "SuperAdmin"), uploadSpreadsheet.single("file"), async (req, res) => {
 
     const schoolId = req.schoolId;
 
@@ -501,17 +528,20 @@ router.get("/add", (req, res) => {
                 getFieldSettings(req.schoolId, "student"),
                 getLookupLists(req.schoolId),
                 getAdmissionNoSettings(req.schoolId),
-                getReferralCandidates(req.schoolId)
+                getReferralCandidates(req.schoolId),
+                getFeePlansForDropdown(req.schoolId)
             ])
-                .then(([fieldSettings, lists, admissionNo, referralCandidates]) => {
+                .then(([fieldSettings, lists, admissionNo, referralCandidates, feePlans]) => {
                     res.render("addStudent", {
                         classes,
                         fieldSettings,
                         lists,
                         admissionNo,
                         referralCandidates,
+                        feePlans,
                         errors: [],
-                        old: {}
+                        old: {},
+                        todayDate: new Date().toISOString().slice(0, 10)
                     });
                 })
                 .catch(err2 => res.send(err2.message));
@@ -552,16 +582,19 @@ router.post("/add", upload.single("photo"), (req, res) => {
                     db.all("SELECT * FROM classes WHERE school_id=? AND is_active=1 ORDER BY class_name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
                 }),
                 getLookupLists(schoolId),
-                getReferralCandidates(schoolId)
-            ]).then(([classes, lists, referralCandidates]) => {
+                getReferralCandidates(schoolId),
+                getFeePlansForDropdown(schoolId)
+            ]).then(([classes, lists, referralCandidates, feePlans]) => {
                 res.render("addStudent", {
                     classes,
                     fieldSettings,
                     lists,
                     admissionNo,
                     referralCandidates,
+                    feePlans,
                     errors: missing,
-                    old: req.body
+                    old: req.body,
+                    todayDate: new Date().toISOString().slice(0, 10)
                 });
             }).catch(err => res.send(err.message));
         }
@@ -590,6 +623,23 @@ router.post("/add", upload.single("photo"), (req, res) => {
                 }
 
                 const studentId = this.lastID;
+
+                logChange({
+                    schoolId, branchId: req.body.branch_id || null, req,
+                    entityType: "Student", entityName: name, action: "Created",
+                    details: `Class/Level assigned, Roll No. ${req.body.admission_no || "auto-assigned"}`
+                });
+
+                // If a Fee Plan was explicitly chosen on the form, generate
+                // periods for JUST that plan (the modern path - lets
+                // families on the same Level pick different frequencies,
+                // e.g. Monthly vs Quarterly). If none was chosen, fall back
+                // to auto-assigning whatever plan(s) already match this
+                // student's Level, for backward compatibility with schools
+                // that only ever set up one plan per Level. Fire-and-forget,
+                // same as the audit log above, so a hiccup here never
+                // blocks registration itself.
+                assignExplicitOrActivePlans(studentId, schoolId, req.body.fee_plan_id).catch(e => console.error("Fee Plan assignment failed:", e.message));
 
                 // If this new student was referred by an existing one,
                 // record it (using this school's default reward, still
@@ -683,9 +733,10 @@ router.get("/edit/:id", (req, res) => {
                         getAdmissionNoSettings(req.schoolId),
                         new Promise((resolve, reject) => {
                             db.all("SELECT day_of_week FROM student_schedule WHERE student_id=?", [req.params.id], (e, rows) => e ? reject(e) : resolve(rows.map(r => r.day_of_week)));
-                        })
+                        }),
+                        getFeePlansForDropdown(req.schoolId)
                     ])
-                        .then(([fieldSettings, lists, admissionNo, scheduleDays]) => {
+                        .then(([fieldSettings, lists, admissionNo, scheduleDays, feePlans]) => {
                             res.render("editStudent", {
                                 student,
                                 classes,
@@ -693,6 +744,7 @@ router.get("/edit/:id", (req, res) => {
                                 lists,
                                 admissionNo,
                                 scheduleDays,
+                                feePlans,
                                 errors: []
                             });
                         })
@@ -761,6 +813,18 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
                 if (err) {
                     return res.send(err.message);
                 }
+
+                logChange({
+                    schoolId, branchId: req.body.branch_id || null, req,
+                    entityType: "Student", entityName: name, action: "Updated"
+                });
+
+                // Top up any Fee Plan periods this student is now missing -
+                // uses the explicitly chosen plan from the form if one was
+                // picked (or changed), otherwise falls back to whatever
+                // plan(s) match their current Level. Purely additive, see
+                // services/feePlanGenerator.js.
+                assignExplicitOrActivePlans(req.params.id, schoolId, req.body.fee_plan_id).catch(e => console.error("Fee Plan assignment failed:", e.message));
 
                 // Weekly attendance schedule - replace wholesale with
                 // whatever's checked now (simplest correct approach for a
@@ -883,18 +947,29 @@ router.post("/enroll-face/:id", requireFeature("faceRecognition"), upload.single
 ===================================================== */
 router.get("/delete/:id", (req, res) => {
 
-    db.run(
-        "DELETE FROM students WHERE id=? AND school_id=?",
-        [req.params.id, req.schoolId],
-        function(err) {
+    const schoolId = req.schoolId;
 
-            if (err) {
-                return res.send(err.message);
-            }
+    db.get("SELECT name, branch_id FROM students WHERE id=? AND school_id=?", [req.params.id, schoolId], (errLookup, student) => {
 
-            res.redirect("/students");
+        db.run(
+            "DELETE FROM students WHERE id=? AND school_id=?",
+            [req.params.id, schoolId],
+            function(err) {
 
-        });
+                if (err) {
+                    return res.send(err.message);
+                }
+
+                logChange({
+                    schoolId, branchId: student ? student.branch_id : null, req,
+                    entityType: "Student", entityName: student ? student.name : `#${req.params.id}`, action: "Deleted"
+                });
+
+                res.redirect("/students");
+
+            });
+
+    });
 
 });
 

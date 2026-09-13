@@ -4,7 +4,7 @@ const db = require("../config/database");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 const { sendBulk } = require("../services/whatsappClient");
-const { requireLogin } = require("../middleware/auth");
+const { requireLogin, requireRole } = require("../middleware/auth");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
 const { getSimpleFeeMode } = require("../services/schoolSettings");
 const { getElapsedInfo, computeExpected, classifyRegularity } = require("../services/attendanceCalc");
@@ -711,6 +711,7 @@ router.get("/fees-due", (req, res) => {
                     rows.push({
                         student: r.student,
                         fee_name: f.fee_name,
+                        installment_label: f.installment_label,
                         due_date: f.due_date,
                         due: f.due,
                         overdue: f.due_date < today
@@ -826,6 +827,67 @@ router.post("/fees-pending/remind", (req, res) => {
             const qsStr = qs.toString();
             res.redirect(`/reports/fees-pending${qsStr ? "?" + qsStr : ""}`);
             sendBulk(recipients, 3000);
+
+        }).catch(err2 => res.send(err2.message));
+
+    });
+
+});
+
+
+/* ===========================================
+   FEE COLLECTION SUMMARY REPORT
+   Unlike Fees Pending (which only lists students who owe money), this
+   shows EVERY student with their Total / Paid / Due, so it answers "how
+   much has each student paid so far" as well as "who still owes" -
+   including students who are fully paid, who Fees Pending never shows.
+=========================================== */
+router.get("/fees-summary", (req, res) => {
+
+    const { batch_id, level_id, class_id, branch_id, status } = req.query;
+    const schoolId = req.schoolId;
+
+    computeDuesByClass(schoolId, null, (err, results) => {
+
+        if (err) return res.send(err.message);
+
+        let rows = results.filter(r => r.feeItems.length > 0); // students with no fee structure at all have nothing to summarize
+        if (batch_id) { rows = rows.filter(r => String(r.student.batch_id) === String(batch_id)); }
+        if (level_id) { rows = rows.filter(r => String(r.student.level_id) === String(level_id)); }
+        if (class_id) { rows = rows.filter(r => String(r.student.class_id) === String(class_id)); }
+        if (branch_id) { rows = rows.filter(r => String(r.student.branch_id) === String(branch_id)); }
+
+        const summarized = rows.map(r => {
+            const totalFee = r.feeItems.reduce((sum, f) => sum + f.netAmount, 0);
+            const totalPaid = r.feeItems.reduce((sum, f) => sum + f.paid, 0);
+            const totalDue = r.totalDue;
+            const feeStatus = totalDue <= 0 ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid");
+            return { student: r.student, totalFee, totalPaid, totalDue, feeStatus };
+        });
+
+        const filtered = status ? summarized.filter(r => r.feeStatus === status) : summarized;
+        filtered.sort((a, b) => a.student.name.localeCompare(b.student.name));
+
+        const grandTotalFee = filtered.reduce((sum, r) => sum + r.totalFee, 0);
+        const grandTotalPaid = filtered.reduce((sum, r) => sum + r.totalPaid, 0);
+        const grandTotalDue = filtered.reduce((sum, r) => sum + r.totalDue, 0);
+
+        Promise.all([
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='level' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId]),
+            dbAll("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId])
+        ]).then(([batches, levels, branches, classes]) => {
+
+            getSimpleFeeMode(schoolId)
+                .then(simpleFeeMode => res.render("feesSummaryReport", {
+                    rows: filtered, batches, levels, branches, classes,
+                    grandTotalFee, grandTotalPaid, grandTotalDue,
+                    batch_id: batch_id || "", level_id: level_id || "",
+                    class_id: class_id || "", branch_id: branch_id || "", status: status || "",
+                    simpleFeeMode
+                }))
+                .catch(err3 => res.send(err3.message));
 
         }).catch(err2 => res.send(err2.message));
 
@@ -998,6 +1060,52 @@ router.get("/student/:id", (req, res) => {
 
                         const feeInfo = duesResults.find(r => r.student.id == studentId) || { feeItems: [], totalDue: 0 };
 
+                        // Groups multi-period fees (Monthly/Bimonthly/
+                        // Quarterly/Half-Yearly installment plans, or an
+                        // auto-assigned Fee Plan) into one summary per Fee
+                        // Category for the "Payment Schedule Summary" card -
+                        // a single lump-sum fee (no installment_label) isn't
+                        // a "schedule" so it's left out of this, it's still
+                        // shown in the regular Fee Status table below.
+                        // feeItems come back in fee_structure insertion
+                        // order, which is already chronological for both
+                        // installment plans and Fee Plans (each period is
+                        // inserted in date order), so the first unpaid one
+                        // encountered is genuinely the next one due.
+                        const scheduleMap = {};
+                        feeInfo.feeItems.forEach(f => {
+                            if (!f.installment_label) return;
+                            if (!scheduleMap[f.fee_name]) {
+                                scheduleMap[f.fee_name] = { fee_name: f.fee_name, totalCount: 0, paidCount: 0, totalAmount: 0, totalPaid: 0, nextDue: null };
+                            }
+                            const s = scheduleMap[f.fee_name];
+                            s.totalCount++;
+                            s.totalAmount += f.netAmount;
+                            s.totalPaid += f.paid;
+                            if (f.due > 0) {
+                                if (!s.nextDue) s.nextDue = f;
+                            } else {
+                                s.paidCount++;
+                            }
+                        });
+                        const feeSchedule = Object.values(scheduleMap).map(s => ({
+                            ...s,
+                            totalAmount: Math.round(s.totalAmount * 100) / 100,
+                            totalPaid: Math.round(s.totalPaid * 100) / 100
+                        }));
+
+                        db.all(
+                            `SELECT fee_payments.*, fee_categories.fee_name, fee_structure.academic_year, fee_structure.installment_label
+                             FROM fee_payments
+                             JOIN fee_structure ON fee_payments.fee_structure_id = fee_structure.id
+                             JOIN fee_categories ON fee_structure.fee_category_id = fee_categories.id
+                             WHERE fee_payments.student_id=? AND fee_payments.school_id=?
+                             ORDER BY fee_payments.payment_date DESC, fee_payments.id DESC`,
+                            [studentId, schoolId],
+                            (errPay, paymentHistory) => {
+
+                                if (errPay) return res.send(errPay.message);
+
                         db.all(
                             `SELECT exams.exam_name, exams.exam_date, subjects.subject_name,
                                     exam_results.marks_obtained, exam_results.max_marks
@@ -1021,11 +1129,16 @@ router.get("/student/:id", (req, res) => {
                                         attSummary,
                                         attendancePct,
                                         feeInfo,
+                                        feeSchedule,
+                                        paymentHistory,
                                         examResults,
                                         simpleFeeMode,
                                         monthlyRegularity
                                     });
                                 }).catch(err2 => res.send(err2.message));
+
+                            }
+                        );
 
                             }
                         );
@@ -1050,7 +1163,7 @@ router.get("/receipt/:paymentId", (req, res) => {
 
     db.get(
         `SELECT fee_payments.*, students.name AS student_name, students.admission_no,
-                fee_categories.fee_name
+                fee_categories.fee_name, fee_structure.installment_label
          FROM fee_payments
          JOIN students ON fee_payments.student_id = students.id
          JOIN fee_structure ON fee_payments.fee_structure_id = fee_structure.id
@@ -1078,7 +1191,7 @@ router.get("/receipt/:paymentId", (req, res) => {
             doc.text(`Student: ${payment.student_name}`);
             doc.text(`Roll Number: ${payment.admission_no || "-"}`);
             doc.moveDown();
-            doc.text(`Fee: ${payment.fee_name}`);
+            doc.text(`Fee: ${payment.fee_name}${payment.installment_label ? ' - ' + payment.installment_label : ''}`);
             doc.text(`Amount Paid: Rs. ${payment.amount_paid}`);
             doc.text(`Mode: ${payment.mode}`);
             if (payment.reference_no) doc.text(`Reference No.: ${payment.reference_no}`);
@@ -1092,6 +1205,56 @@ router.get("/receipt/:paymentId", (req, res) => {
 
         }
     );
+
+});
+
+/* ===========================================
+   AUDIT LOG REPORT (Admin/SuperAdmin only)
+   Shows the change history captured by services/auditLog.js - see that
+   file for exactly which actions are currently logged (Students, Fee
+   Payments/Discounts/Structure, Attendance, Exams, User accounts). Since
+   Branch is fundamentally a per-student attribute in this app, only
+   entries tied to a specific student carry a branch_id; entries that
+   aren't (e.g. a user account change) show under "No Branch" and won't
+   match a specific Branch filter.
+=========================================== */
+router.get("/audit-log", requireRole("Admin", "SuperAdmin"), async (req, res) => {
+
+    const schoolId = req.schoolId;
+    const { branch_id, entity_type, from_date, to_date, user_id } = req.query;
+
+    let sql = `
+        SELECT audit_logs.*, branch.name AS branch_name
+        FROM audit_logs
+        LEFT JOIN lookup_items branch ON audit_logs.branch_id = branch.id
+        WHERE audit_logs.school_id = ?
+    `;
+    const params = [schoolId];
+    if (branch_id) { sql += " AND audit_logs.branch_id = ?"; params.push(branch_id); }
+    if (entity_type) { sql += " AND audit_logs.entity_type = ?"; params.push(entity_type); }
+    if (user_id) { sql += " AND audit_logs.user_id = ?"; params.push(user_id); }
+    if (from_date) { sql += " AND date(audit_logs.created_at) >= ?"; params.push(from_date); }
+    if (to_date) { sql += " AND date(audit_logs.created_at) <= ?"; params.push(to_date); }
+    sql += " ORDER BY audit_logs.created_at DESC LIMIT 500";
+
+    try {
+
+        const [logs, branches, entityTypes, users] = await Promise.all([
+            dbAll(sql, params),
+            dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='branch' ORDER BY name", [schoolId]),
+            dbAll("SELECT DISTINCT entity_type FROM audit_logs WHERE school_id=? ORDER BY entity_type", [schoolId]),
+            dbAll("SELECT DISTINCT user_id, user_name FROM audit_logs WHERE school_id=? AND user_id IS NOT NULL ORDER BY user_name", [schoolId])
+        ]);
+
+        res.render("auditLog", {
+            logs, branches, entityTypes, users,
+            branch_id: branch_id || "", entity_type: entity_type || "",
+            from_date: from_date || "", to_date: to_date || "", user_id: user_id || ""
+        });
+
+    } catch (e) {
+        res.send(e.message);
+    }
 
 });
 

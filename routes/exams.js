@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin } = require("../middleware/auth");
+const { computeNetAmount } = require("../services/feeCalc");
+const { logChange } = require("../services/auditLog");
 
 router.use(requireLogin);
 
@@ -17,15 +19,44 @@ router.get("/", (req, res) => {
         if (err) return res.send(err.message);
 
         db.all(
-            `SELECT exams.*, level.name AS level_name
+            `SELECT exams.*, level.name AS level_name,
+                    fee_structure.amount AS fee_amount
              FROM exams
              JOIN lookup_items level ON exams.level_id = level.id
+             LEFT JOIN fee_structure ON exams.fee_structure_id = fee_structure.id
              WHERE exams.school_id = ?
              ORDER BY exams.exam_date DESC`,
             [schoolId],
-            (err, exams) => {
+            async (err, exams) => {
 
                 if (err) return res.send(err.message);
+
+                // For each exam that has a fee, show a quick "X of Y paid"
+                // count - informational only, doesn't block anything (see
+                // the note on the Exam Fee field itself). Computed in JS
+                // rather than pure SQL so discounts/waivers are accounted
+                // for correctly (a student who fully paid their DISCOUNTED
+                // amount should count as paid, not show as still owing).
+                for (const exam of exams) {
+                    if (!exam.fee_structure_id) continue;
+
+                    const [levelStudents, payments, discounts] = await Promise.all([
+                        dbAllAsync("SELECT id FROM students WHERE school_id=? AND level_id=?", [schoolId, exam.level_id]),
+                        dbAllAsync("SELECT student_id, amount_paid FROM fee_payments WHERE fee_structure_id=? AND school_id=?", [exam.fee_structure_id, schoolId]),
+                        dbAllAsync("SELECT student_id, discount_type, discount_value FROM fee_discounts WHERE fee_structure_id=? AND school_id=?", [exam.fee_structure_id, schoolId])
+                    ]);
+
+                    let paidCount = 0;
+                    levelStudents.forEach(s => {
+                        const paid = payments.filter(p => p.student_id === s.id).reduce((sum, p) => sum + p.amount_paid, 0);
+                        const discount = discounts.find(d => d.student_id === s.id) || null;
+                        const netAmount = computeNetAmount(exam.fee_amount, discount);
+                        if (paid >= netAmount) paidCount++;
+                    });
+
+                    exam.feePaidCount = paidCount;
+                    exam.feeTotalCount = levelStudents.length;
+                }
 
                 res.render("exams", { levels, exams });
 
@@ -39,25 +70,80 @@ router.get("/", (req, res) => {
 
 /* ===========================================
    CREATE EXAM
+   An optional Exam Fee amount, if given, is NOT tracked separately -
+   it reuses the exact same fee_structure/fee_payments/fee_discounts
+   machinery as every other fee, by auto-creating a Fee Category (named
+   after this exam, so it's distinguishable from other exams' fees in
+   reports) and a Fee Structure row for this exam's Level + Academic
+   Year. That row then shows up automatically in Fee Dues, Fee
+   Collection, Fee Collection Summary, and Student Payment History -
+   and can be discounted or waived per student the same way any other
+   fee already can, from the normal Fee Collection screen.
 =========================================== */
-router.post("/add", (req, res) => {
+router.post("/add", async (req, res) => {
 
-    const { exam_name, level_id, academic_year, exam_date } = req.body;
+    const { exam_name, level_id, academic_year, exam_date, fee_amount } = req.body;
+    const schoolId = req.schoolId;
 
-    db.run(
-        `INSERT INTO exams (exam_name, level_id, academic_year, exam_date, school_id)
-         VALUES (?,?,?,?,?)`,
-        [exam_name, level_id, academic_year, exam_date, req.schoolId],
-        function(err) {
+    try {
 
-            if (err) return res.send(err.message);
+        let feeStructureId = null;
+        const amount = parseFloat(fee_amount);
 
-            res.redirect("/exams");
+        if (!isNaN(amount) && amount > 0) {
+
+            const categoryName = `Exam Fee: ${exam_name}`.slice(0, 190);
+
+            // Reuse an existing category of this exact name if one
+            // somehow already exists (e.g. two exams named identically),
+            // rather than erroring - fee_categories has no hard DB-level
+            // uniqueness constraint, just the manual check in routes/fees.js.
+            let category = await dbGetOne("SELECT id FROM fee_categories WHERE school_id=? AND fee_name=?", [schoolId, categoryName]);
+            if (!category) {
+                const result = await dbRunAsync(
+                    "INSERT INTO fee_categories (fee_name, description, school_id) VALUES (?,?,?)",
+                    [categoryName, `Auto-created for the exam "${exam_name}"`, schoolId]
+                );
+                category = { id: result.lastID };
+            }
+
+            const structResult = await dbRunAsync(
+                "INSERT INTO fee_structure (level_id, fee_category_id, academic_year, amount, school_id) VALUES (?,?,?,?,?)",
+                [level_id, category.id, academic_year, amount, schoolId]
+            );
+            feeStructureId = structResult.lastID;
 
         }
-    );
+
+        await dbRunAsync(
+            `INSERT INTO exams (exam_name, level_id, academic_year, exam_date, fee_structure_id, school_id)
+             VALUES (?,?,?,?,?,?)`,
+            [exam_name, level_id, academic_year, exam_date, feeStructureId, schoolId]
+        );
+
+        logChange({
+            schoolId, branchId: null, req,
+            entityType: "Exam", entityName: exam_name, action: "Created",
+            details: feeStructureId ? `${academic_year}, exam fee ₹${amount}` : academic_year
+        });
+
+        res.redirect("/exams");
+
+    } catch (e) {
+        res.send(e.message);
+    }
 
 });
+
+function dbGetOne(sql, params) {
+    return new Promise((resolve, reject) => db.get(sql, params, (err, row) => err ? reject(err) : resolve(row)));
+}
+function dbRunAsync(sql, params) {
+    return new Promise((resolve, reject) => db.run(sql, params, function(err) { err ? reject(err) : resolve(this); }));
+}
+function dbAllAsync(sql, params) {
+    return new Promise((resolve, reject) => db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows)));
+}
 
 
 /* ===========================================
@@ -65,13 +151,24 @@ router.post("/add", (req, res) => {
 =========================================== */
 router.get("/delete/:id", (req, res) => {
 
-    db.run("DELETE FROM exam_results WHERE exam_id=? AND school_id=?", [req.params.id, req.schoolId], () => {
+    const schoolId = req.schoolId;
 
-        db.run("DELETE FROM exams WHERE id=? AND school_id=?", [req.params.id, req.schoolId], (err) => {
+    db.get("SELECT exam_name FROM exams WHERE id=? AND school_id=?", [req.params.id, schoolId], (errLookup, exam) => {
 
-            if (err) return res.send(err.message);
+        db.run("DELETE FROM exam_results WHERE exam_id=? AND school_id=?", [req.params.id, schoolId], () => {
 
-            res.redirect("/exams");
+            db.run("DELETE FROM exams WHERE id=? AND school_id=?", [req.params.id, schoolId], (err) => {
+
+                if (err) return res.send(err.message);
+
+                logChange({
+                    schoolId, branchId: null, req,
+                    entityType: "Exam", entityName: exam ? exam.exam_name : `#${req.params.id}`, action: "Deleted"
+                });
+
+                res.redirect("/exams");
+
+            });
 
         });
 

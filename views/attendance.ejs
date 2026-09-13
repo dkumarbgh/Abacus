@@ -3,7 +3,14 @@
 
 <div class="container mt-4">
 
-    <h2 class="mb-4">📅 Attendance Management</h2>
+    <h2 class="mb-4">📅 <%= t('attendance.title') %></h2>
+
+    <% if (importExportEnabled && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin')) { %>
+        <div class="mb-3">
+            <a href="/attendance/import" class="btn btn-outline-success btn-sm"><%= t('attendance.import_button') %></a>
+            <a href="/attendance/export" class="btn btn-outline-primary btn-sm"><%= t('attendance.export_button') %></a>
+        </div>
+    <% } %>
 
     <% if (features.faceRecognition) { %>
         <a href="/attendance/face-capture" class="btn btn-outline-primary mb-4">📷 Mark Attendance via Laptop Camera</a>
@@ -127,20 +134,46 @@
 
         <div class="card shadow-sm mb-3">
             <div class="card-body">
-                <label class="form-label small mb-1">Add a student attending from a DIFFERENT batch today (e.g. makeup class)</label>
+                <label class="form-label small mb-1"><%= t('attendance.add_cross_batch_label') %></label>
                 <div class="d-flex gap-2">
-                    <input type="text" id="crossBatchSearch" class="form-control" placeholder="Search by Roll No. or Name...">
+                    <input type="text" id="crossBatchSearch" class="form-control" placeholder="<%= t('attendance.search_placeholder') %>">
                 </div>
                 <div id="crossBatchResults" class="list-group mt-2"></div>
+
+                <hr>
+
+                <label class="form-label small mb-1"><%= t('attendance.add_from_batch_label') %></label>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <select id="bulkBatchSelect" class="form-select">
+                            <option value=""><%= t('attendance.add_from_batch_select') %></option>
+                            <% batches.forEach(function(b) { %>
+                                <% if (String(b.id) !== String(selectedBatch)) { %>
+                                    <option value="<%= b.id %>"><%= b.name %></option>
+                                <% } %>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+                <div id="bulkBatchChecklistWrap" class="mt-2" style="display:none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <button type="button" id="bulkSelectAllBtn" class="btn btn-sm btn-outline-secondary"><%= t('attendance.select_all') %></button>
+                            <button type="button" id="bulkClearAllBtn" class="btn btn-sm btn-outline-secondary"><%= t('attendance.clear_all') %></button>
+                        </div>
+                        <button type="button" id="bulkAddSelectedBtn" class="btn btn-sm btn-success"><%= t('attendance.add_selected') %></button>
+                    </div>
+                    <div id="bulkBatchChecklist" class="list-group" style="max-height:320px; overflow-y:auto;"></div>
+                </div>
             </div>
         </div>
 
-        <button class="btn btn-success">💾 Save Attendance</button>
+        <button class="btn btn-success"><%= t('attendance.save_button') %></button>
 
     </form>
 
     <% } else if (selectedBatch) { %>
-        <p class="text-muted">No students are assigned to this batch yet.</p>
+        <p class="text-muted"><%= t('attendance.no_students') %></p>
     <% } %>
 
 </div>
@@ -267,6 +300,76 @@ function addCrossBatchStudent(id, name, admissionNo, photoPath) {
     document.getElementById('crossBatchSearch').value = '';
     document.getElementById('crossBatchResults').innerHTML = '';
 }
+
+// Bulk "add several students from another batch at once" - pick a batch,
+// see everyone in it as a checklist, check off however many actually
+// showed up today, and add them all with one click instead of searching
+// and clicking one name at a time.
+const bulkBatchSelect = document.getElementById('bulkBatchSelect');
+if (bulkBatchSelect) {
+
+    bulkBatchSelect.addEventListener('change', async function () {
+
+        const checklistWrap = document.getElementById('bulkBatchChecklistWrap');
+        const checklist = document.getElementById('bulkBatchChecklist');
+
+        if (!this.value) {
+            checklistWrap.style.display = 'none';
+            checklist.innerHTML = '';
+            return;
+        }
+
+        checklist.innerHTML = '<div class="list-group-item text-muted">Loading...</div>';
+        checklistWrap.style.display = 'block';
+
+        const res = await fetch('/attendance/batch-students?batch_id=' + this.value);
+        const data = await res.json();
+        if (!data.ok) { checklist.innerHTML = '<div class="list-group-item text-danger">Could not load students.</div>'; return; }
+
+        // Already-on-screen students (home roster + already-added cross-batch
+        // entries) shouldn't be offered again.
+        const alreadyOnScreen = new Set(
+            Array.from(document.querySelectorAll('[id^="student-row-"], [id^="cross-row-"]'))
+                .map(el => el.id.replace('student-row-', '').replace('cross-row-', ''))
+        );
+        const available = data.students.filter(s => !alreadyOnScreen.has(String(s.id)));
+
+        if (available.length === 0) {
+            checklist.innerHTML = '<div class="list-group-item text-muted">Everyone in this batch is already on the sheet above.</div>';
+            return;
+        }
+
+        checklist.innerHTML = available.map(s => `
+            <label class="list-group-item d-flex align-items-center gap-2">
+                <input type="checkbox" class="form-check-input bulk-batch-checkbox" value="${s.id}"
+                       data-name="${s.name.replace(/"/g, '&quot;')}"
+                       data-admission="${(s.admission_no || '').replace(/"/g, '&quot;')}"
+                       data-photo="${(s.photo_path || '').replace(/"/g, '&quot;')}">
+                <span>${s.name} ${s.admission_no ? '(' + s.admission_no + ')' : ''} ${s.level_name ? '- ' + s.level_name : ''}</span>
+            </label>
+        `).join('');
+
+    });
+
+    document.getElementById('bulkSelectAllBtn').addEventListener('click', () => {
+        document.querySelectorAll('.bulk-batch-checkbox').forEach(cb => { cb.checked = true; });
+    });
+    document.getElementById('bulkClearAllBtn').addEventListener('click', () => {
+        document.querySelectorAll('.bulk-batch-checkbox').forEach(cb => { cb.checked = false; });
+    });
+
+    document.getElementById('bulkAddSelectedBtn').addEventListener('click', () => {
+        const checked = document.querySelectorAll('.bulk-batch-checkbox:checked');
+        checked.forEach(cb => {
+            addCrossBatchStudent(cb.value, cb.dataset.name, cb.dataset.admission, cb.dataset.photo);
+        });
+        // Re-trigger the batch dropdown's change handler to refresh the
+        // checklist (now excluding everyone just added).
+        bulkBatchSelect.dispatchEvent(new Event('change'));
+    });
+
+}
+
 </script>
 
 <%- include("partials/footer") %>

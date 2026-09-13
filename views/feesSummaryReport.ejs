@@ -1,0 +1,147 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>Fee Collection Summary
+    <% if (simpleFeeMode) { %><span class="badge bg-warning text-dark align-middle">Simple Fee Mode: exact amounts hidden</span><% } %>
+</h2>
+<p class="text-muted">Every student with a fee structure - paid and unpaid alike. For just the students who still owe money (with bulk reminders), see the Fees Pending Report instead.</p>
+
+<div class="row mb-3 g-2">
+    <div class="col-md-2">
+        <form method="GET" action="/reports/fees-summary">
+            <select name="batch_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Batches</option>
+                <% batches.forEach(b => { %>
+                    <option value="<%= b.id %>" <%= String(batch_id)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="level_id" value="<%= level_id %>">
+            <input type="hidden" name="class_id" value="<%= class_id %>">
+            <input type="hidden" name="branch_id" value="<%= branch_id %>">
+            <input type="hidden" name="status" value="<%= status %>">
+        </form>
+    </div>
+    <div class="col-md-2">
+        <form method="GET" action="/reports/fees-summary">
+            <select name="level_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Levels</option>
+                <% levels.forEach(l => { %>
+                    <option value="<%= l.id %>" <%= String(level_id)===String(l.id) ? "selected" : "" %>><%= l.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="batch_id" value="<%= batch_id %>">
+            <input type="hidden" name="class_id" value="<%= class_id %>">
+            <input type="hidden" name="branch_id" value="<%= branch_id %>">
+            <input type="hidden" name="status" value="<%= status %>">
+        </form>
+    </div>
+    <div class="col-md-2">
+        <form method="GET" action="/reports/fees-summary">
+            <select name="class_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Standards / Classes</option>
+                <% classes.forEach(c => { %>
+                    <option value="<%= c.id %>" <%= String(class_id)===String(c.id) ? "selected" : "" %>><%= c.class_name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="batch_id" value="<%= batch_id %>">
+            <input type="hidden" name="level_id" value="<%= level_id %>">
+            <input type="hidden" name="branch_id" value="<%= branch_id %>">
+            <input type="hidden" name="status" value="<%= status %>">
+        </form>
+    </div>
+    <div class="col-md-2">
+        <form method="GET" action="/reports/fees-summary">
+            <select name="branch_id" class="form-select" onchange="this.form.submit()">
+                <option value="">All Branches / Centres</option>
+                <% branches.forEach(b => { %>
+                    <option value="<%= b.id %>" <%= String(branch_id)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+                <% }) %>
+            </select>
+            <input type="hidden" name="batch_id" value="<%= batch_id %>">
+            <input type="hidden" name="level_id" value="<%= level_id %>">
+            <input type="hidden" name="class_id" value="<%= class_id %>">
+            <input type="hidden" name="status" value="<%= status %>">
+        </form>
+    </div>
+    <div class="col-md-2">
+        <form method="GET" action="/reports/fees-summary">
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="">All Statuses</option>
+                <option value="Paid" <%= status==='Paid' ? 'selected' : '' %>>Fully Paid</option>
+                <option value="Partial" <%= status==='Partial' ? 'selected' : '' %>>Partially Paid</option>
+                <option value="Unpaid" <%= status==='Unpaid' ? 'selected' : '' %>>Unpaid</option>
+            </select>
+            <input type="hidden" name="batch_id" value="<%= batch_id %>">
+            <input type="hidden" name="level_id" value="<%= level_id %>">
+            <input type="hidden" name="class_id" value="<%= class_id %>">
+            <input type="hidden" name="branch_id" value="<%= branch_id %>">
+        </form>
+    </div>
+</div>
+
+<% if (!simpleFeeMode) { %>
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="card shadow-sm"><div class="card-body text-center">
+            <div class="text-muted small">Total Fee (this filter)</div>
+            <div class="fs-4">₹<%= grandTotalFee %></div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-success"><div class="card-body text-center">
+            <div class="text-muted small">Total Collected</div>
+            <div class="fs-4 text-success">₹<%= grandTotalPaid %></div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger"><div class="card-body text-center">
+            <div class="text-muted small">Total Outstanding</div>
+            <div class="fs-4 text-danger">₹<%= grandTotalDue %></div>
+        </div></div>
+    </div>
+</div>
+<% } %>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>Student</th><th>Batch</th><th>Level</th><th>Standard/Class</th>
+            <% if (!simpleFeeMode) { %><th>Total Fee</th><th>Paid</th><th>Due</th><% } %>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (rows.length === 0) { %>
+            <tr><td colspan="<%= simpleFeeMode ? 5 : 8 %>" class="text-center">No students match these filters.</td></tr>
+        <% } %>
+        <% rows.forEach(r => { %>
+            <% const lvl = levels.find(l => String(l.id)===String(r.student.level_id)); %>
+            <% const bat = batches.find(b => String(b.id)===String(r.student.batch_id)); %>
+            <% const cls = classes.find(c => String(c.id)===String(r.student.class_id)); %>
+            <tr>
+                <td><a href="/reports/student/<%= r.student.id %>"><%= r.student.name %></a></td>
+                <td><%= bat ? bat.name : "-" %></td>
+                <td><%= lvl ? lvl.name : "-" %></td>
+                <td><%= cls ? cls.class_name : "-" %></td>
+                <% if (!simpleFeeMode) { %>
+                    <td>₹<%= r.totalFee %></td>
+                    <td>₹<%= r.totalPaid %></td>
+                    <td><%= r.totalDue > 0 ? "₹" + r.totalDue : "-" %></td>
+                <% } %>
+                <td>
+                    <% if (r.feeStatus === 'Paid') { %>
+                        <span class="badge bg-success">Fully Paid</span>
+                    <% } else if (r.feeStatus === 'Partial') { %>
+                        <span class="badge bg-warning text-dark">Partially Paid</span>
+                    <% } else { %>
+                        <span class="badge bg-danger">Unpaid</span>
+                    <% } %>
+                </td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

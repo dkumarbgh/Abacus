@@ -193,6 +193,40 @@
                             <input type="date" name="fee_due_date" class="form-control" value="<%= student.fee_due_date || '' %>"
                                    <%= fieldSettings.fee_due_date ? "required" : "" %>>
                         </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Date of Joining</label>
+                            <input type="date" name="date_of_joining" class="form-control" value="<%= student.date_of_joining || '' %>">
+                            <small class="text-muted">Drives Fee Plan periods (Settings &gt; Fee Structure) - fees are only generated from this date onward.</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Fee Plan (optional)</label>
+                            <% if (feePlans.length > 0) { %>
+                                <select name="fee_plan_id" class="form-select">
+                                    <option value="">None - handle fees manually / via Fee Structure</option>
+                                    <% feePlans.forEach(function(p) { %>
+                                        <option value="<%= p.id %>" <%= String(student.fee_plan_id)===String(p.id) ? "selected" : "" %>><%= p.label %></option>
+                                    <% }) %>
+                                </select>
+                                <small class="text-muted">
+                                    Saving this syncs the student's periods to this plan and their
+                                    current Date of Joining above - it adds whatever's missing and
+                                    reshapes any still-unpaid periods to match, but never touches a
+                                    period that's already been paid or discounted (under this or a
+                                    previous plan).
+                                </small>
+                            <% } else { %>
+                                <select class="form-select" disabled>
+                                    <option>No Fee Plans set up yet</option>
+                                </select>
+                                <small class="text-muted">
+                                    Create one under <a href="/fee-structure" target="_blank">Fee Structure &gt; Auto (From Join Date)</a>
+                                    to let this student be assigned a payment frequency (Monthly/Quarterly/etc.).
+                                </small>
+                            <% } %>
+                        </div>
                     </div>
 
                     <hr>

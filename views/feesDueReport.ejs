@@ -57,7 +57,7 @@
         <% rows.forEach(r => { %>
             <tr class="<%= r.overdue ? 'table-danger' : '' %>">
                 <td><a href="/reports/student/<%= r.student.id %>"><%= r.student.name %></a></td>
-                <td><%= r.fee_name %></td>
+                <td><%= r.fee_name %><%= r.installment_label ? ' - ' + r.installment_label : '' %></td>
                 <td><%= r.due_date %></td>
                 <% if (!simpleFeeMode) { %><td>₹<%= r.due %></td><% } %>
                 <td>

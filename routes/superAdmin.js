@@ -8,6 +8,7 @@ const fs = require("fs");
 const os = require("os");
 const sqlite3 = require("sqlite3");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { logChange } = require("../services/auditLog");
 
 // Mirrors the same default used in config/database.js - duplicated here
 // (rather than importing it) because config/database.js exports the open
@@ -343,6 +344,12 @@ router.post("/schools/:id/users/add", (req, res) => {
                 });
             }
 
+            logChange({
+                schoolId, branchId: null, req,
+                entityType: "User", entityName: `${name} (${email})`, action: "Created",
+                details: `Role: ${role || "Teacher"}`
+            });
+
             res.redirect(`/super-admin/schools/${schoolId}`);
 
         }
@@ -420,6 +427,12 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
                 return res.render("superAdmin/editUser", { user: { id: targetId, name, email, role }, schoolId, error: message });
             }
 
+            logChange({
+                schoolId, branchId: null, req,
+                entityType: "User", entityName: `${name} (${email})`, action: "Updated",
+                details: `Role: ${role}${password && password.trim() ? ", password reset" : ""}`
+            });
+
             res.redirect(`/super-admin/schools/${schoolId}`);
 
         }
@@ -437,7 +450,7 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
     const targetId = req.params.userId;
 
     const target = await new Promise((resolve, reject) => {
-        db.get("SELECT role FROM users WHERE id=? AND school_id=?", [targetId, schoolId], (err, row) => err ? reject(err) : resolve(row));
+        db.get("SELECT name, email, role FROM users WHERE id=? AND school_id=?", [targetId, schoolId], (err, row) => err ? reject(err) : resolve(row));
     });
 
     if (target && target.role === "Admin") {
@@ -452,6 +465,13 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
     db.run("DELETE FROM users WHERE id=? AND school_id=?", [targetId, schoolId], (err) => {
 
         if (err) return res.send(err.message);
+
+        logChange({
+            schoolId, branchId: null, req,
+            entityType: "User",
+            entityName: target ? `${target.name} (${target.email})` : `#${targetId}`,
+            action: "Deleted"
+        });
 
         res.redirect(`/super-admin/schools/${schoolId}`);
 

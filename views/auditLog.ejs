@@ -1,0 +1,76 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<h2>📋 Audit Log</h2>
+<p class="text-muted">
+    A history of significant changes (Students, Fee Payments/Discounts/Structure, Attendance,
+    Exams, User accounts). Showing the most recent 500 matching entries. Entries not tied to a
+    specific student (e.g. a user account change) show under "No Branch".
+</p>
+
+<form method="GET" action="/reports/audit-log" class="row g-2 mb-3">
+    <div class="col-md-2">
+        <select name="branch_id" class="form-select" onchange="this.form.submit()">
+            <option value="">All Branches</option>
+            <% branches.forEach(b => { %>
+                <option value="<%= b.id %>" <%= String(branch_id)===String(b.id) ? "selected" : "" %>><%= b.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="entity_type" class="form-select" onchange="this.form.submit()">
+            <option value="">All Types</option>
+            <% entityTypes.forEach(e => { %>
+                <option value="<%= e.entity_type %>" <%= entity_type===e.entity_type ? "selected" : "" %>><%= e.entity_type %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="user_id" class="form-select" onchange="this.form.submit()">
+            <option value="">All Users</option>
+            <% users.forEach(u => { %>
+                <option value="<%= u.user_id %>" <%= String(user_id)===String(u.user_id) ? "selected" : "" %>><%= u.user_name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <input type="date" name="from_date" class="form-control" value="<%= from_date %>" placeholder="From" onchange="this.form.submit()">
+    </div>
+    <div class="col-md-2">
+        <input type="date" name="to_date" class="form-control" value="<%= to_date %>" placeholder="To" onchange="this.form.submit()">
+    </div>
+    <div class="col-md-2">
+        <a href="/reports/audit-log" class="btn btn-outline-secondary w-100">Clear Filters</a>
+    </div>
+</form>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>When</th><th>User</th><th>Type</th><th>Item</th><th>Action</th><th>Branch</th><th>Details</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (logs.length === 0) { %>
+            <tr><td colspan="7" class="text-center">No matching audit log entries.</td></tr>
+        <% } %>
+        <% logs.forEach(l => { %>
+            <tr>
+                <td class="text-nowrap"><%= l.created_at %></td>
+                <td><%= l.user_name || "-" %></td>
+                <td><span class="badge bg-secondary"><%= l.entity_type %></span></td>
+                <td><%= l.entity_name || "-" %></td>
+                <td>
+                    <% const actionColor = l.action.includes('Delet') ? 'bg-danger' : (l.action.includes('Creat') || l.action.includes('Paid') ? 'bg-success' : 'bg-info text-dark'); %>
+                    <span class="badge <%= actionColor %>"><%= l.action %></span>
+                </td>
+                <td><%= l.branch_name || "No Branch" %></td>
+                <td class="small text-muted"><%= l.details || "-" %></td>
+            </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<a href="/reports" class="btn btn-link">&larr; Back to Reports</a>
+
+<%- include("partials/footer") %>

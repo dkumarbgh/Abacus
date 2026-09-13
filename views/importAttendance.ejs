@@ -1,0 +1,69 @@
+<%- include("partials/header") %>
+<%- include("partials/navbar") %>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4><%= t('attendance.import_button') %></h4>
+            </div>
+            <div class="card-body">
+
+                <ol>
+                    <li>
+                        <a href="/attendance/import/template">⬇ Download the template</a>
+                        (an Excel file with the right column headers and one example row).
+                    </li>
+                    <li>Fill in one row per student per day, save it, then upload it below.</li>
+                    <li>
+                        <strong>Batch</strong> must already exist (set up under Lists first) - a typo there
+                        will cause that row to be skipped.
+                    </li>
+                    <li>
+                        If a row's Batch doesn't match that student's own assigned Batch, it's treated as a
+                        cross-batch (makeup class) visit - always recorded as Present, same as adding one
+                        manually from the Attendance screen.
+                    </li>
+                    <li>
+                        Re-uploading a sheet won't create duplicates: every row for the same Batch and Date
+                        replaces whatever was previously saved for that Batch+Date, exactly like re-saving
+                        attendance manually for that same day would.
+                    </li>
+                </ol>
+
+                <% if (result && result.error) { %>
+                    <div class="alert alert-danger"><%= result.error %></div>
+                <% } %>
+
+                <% if (result && typeof result.imported !== 'undefined') { %>
+                    <div class="alert <%= result.rowErrors.length ? 'alert-warning' : 'alert-success' %>">
+                        <strong><%= result.imported %></strong> attendance record<%= result.imported===1?'':'s' %> saved,
+                        out of <%= result.total %> row<%= result.total===1?'':'s' %>.
+                        <% if (result.rowErrors.length) { %>
+                            <%= result.rowErrors.length %> row<%= result.rowErrors.length===1?'':'s' %> skipped - see below.
+                        <% } %>
+                    </div>
+                    <% if (result.rowErrors.length) { %>
+                        <ul class="small text-danger">
+                            <% result.rowErrors.forEach(function(msg){ %>
+                                <li><%= msg %></li>
+                            <% }) %>
+                        </ul>
+                    <% } %>
+                    <a href="/attendance" class="btn btn-outline-primary btn-sm mb-3">Go to Attendance</a>
+                <% } %>
+
+                <form action="/attendance/import" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Filled-in file (.xlsx)</label>
+                        <input type="file" name="file" accept=".xlsx" class="form-control" required>
+                    </div>
+                    <button class="btn btn-success">Upload &amp; Import</button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("partials/footer") %>

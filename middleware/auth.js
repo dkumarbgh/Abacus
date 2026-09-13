@@ -1,12 +1,16 @@
 const jwt = require("jsonwebtoken");
+const { buildTranslator } = require("../services/labels");
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
 
 /* ===========================================
    WEB (session-based) AUTH
-   Attaches req.schoolId / req.userRole for convenience.
+   Attaches req.schoolId / req.userRole for convenience, and res.locals.t
+   (see services/labels.js) so every view can call t('some.key') for
+   customizable/translatable text without each route having to wire it up
+   itself.
 =========================================== */
-function requireLogin(req, res, next) {
+async function requireLogin(req, res, next) {
 
     if (!req.session || !req.session.userId) {
         return res.redirect("/login");
@@ -14,6 +18,16 @@ function requireLogin(req, res, next) {
 
     req.schoolId = req.session.schoolId;
     req.userRole = req.session.role;
+
+    try {
+        res.locals.t = await buildTranslator(req.schoolId);
+    } catch (e) {
+        // Never let a labels-lookup hiccup take down an otherwise-working
+        // page - fall back to plain English defaults for this request.
+        const { DEFAULTS } = require("../services/labels");
+        res.locals.t = (key) => (DEFAULTS.en[key] !== undefined ? DEFAULTS.en[key] : key);
+    }
+
     next();
 
 }
@@ -71,4 +85,29 @@ function requireApiAuth(req, res, next) {
 
 }
 
-module.exports = { requireLogin, requireRole, requireApiAuth, requireFeature, JWT_SECRET };
+/* ===========================================
+   PER-SCHOOL FEATURE TOGGLES
+   Unlike requireFeature() above (deployment-wide, set via .env), these
+   check a column on the schools table - changeable per school from
+   Settings without touching environment variables or redeploying. See
+   config/database.js for the schools.*_enabled columns, and
+   routes/settings.js for where they're toggled.
+=========================================== */
+function requireSchoolFeature(columnName, friendlyName) {
+    return (req, res, next) => {
+        const db = require("../config/database");
+        db.get(`SELECT ${columnName} AS enabled FROM schools WHERE id=?`, [req.schoolId], (err, row) => {
+            if (err) return res.send(err.message);
+            if (!row || !row.enabled) {
+                return res.status(403).send(
+                    `<h3>${friendlyName} Import/Export isn't turned on for your school.</h3>` +
+                    `<p>An Admin can enable it from Settings.</p>` +
+                    `<a href="/settings">Go to Settings</a>`
+                );
+            }
+            next();
+        });
+    };
+}
+
+module.exports = { requireLogin, requireRole, requireApiAuth, requireFeature, requireSchoolFeature, JWT_SECRET };

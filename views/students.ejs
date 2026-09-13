@@ -52,8 +52,10 @@
     </div>
     <div class="col-md-2 text-end">
         <a href="/students/add" class="btn btn-success">➕ Register Student</a>
-        <a href="/students/import" class="btn btn-outline-secondary">⬆ Import</a>
-        <a href="/students/export" class="btn btn-outline-secondary">⬇ Export</a>
+        <% if (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin')) { %>
+            <a href="/students/import" class="btn btn-outline-secondary">⬆ Import</a>
+            <a href="/students/export" class="btn btn-outline-secondary">⬇ Export</a>
+        <% } %>
     </div>
 </div>
 
