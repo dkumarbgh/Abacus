@@ -512,6 +512,33 @@ async function migrate() {
     // that's already there for a given student.
     await addColumnIfMissing("fee_structure", "fee_plan_id", "INTEGER REFERENCES fee_plans(id)");
 
+    // Remembers the LAST schedule typed into a student's Fees tab (see
+    // services/studentFeeComponents.js / routes/studentFees.js) for a
+    // given Level + component (Tuition Fee / Books Fee), so setting up
+    // the next student doesn't mean retyping the same amounts. One row
+    // per (school_id, level_id, category_name) - level_id may be NULL,
+    // meaning "the school-wide default for this category" used as a
+    // fallback when a student's own Level has no template of its own.
+    // Deliberately does NOT store due dates/start dates - those genuinely
+    // differ per student and are always entered fresh; only the amounts
+    // and (for Monthly) the month count, and (for Custom) each
+    // installment's label+amount, are remembered.
+    await run(`
+        CREATE TABLE IF NOT EXISTS fee_templates(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            level_id INTEGER,
+            category_name TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            total_amount REAL,
+            months INTEGER,
+            installments_json TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(school_id) REFERENCES schools(id),
+            FOREIGN KEY(level_id) REFERENCES lookup_items(id)
+        )
+    `);
+
     // Sessions per week - only meaningful for list_type='batch', used to
     // compute each batch's expected classes per month (sessions_per_week x
     // ~4 weeks) for the attendance-regularity report. NULL for course/

@@ -4,8 +4,9 @@
 <div class="row justify-content-center">
     <div class="col-md-9">
         <div class="card shadow">
-            <div class="card-header bg-warning">
-                <h4>Edit Student</h4>
+            <div class="card-header bg-warning d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Edit Student</h4>
+                <a href="/student-fees/<%= student.id %>" class="btn btn-outline-dark btn-sm" target="_blank">💰 Fees Page</a>
             </div>
             <div class="card-body">
 
@@ -410,7 +411,9 @@
                         Editing Total Fee updates this student's personalized fee item (it won't duplicate it).
                         Any installment entered here is a NEW payment on top of what's already recorded -
                         check the <a href="/fee-payments/<%= student.id %>" target="_blank">Fee Collection page</a>
-                        for full payment history.
+                        for full payment history. For separately tracked Tuition Fee and Books Fee amounts
+                        with their own payment schedules, use the
+                        <a href="/student-fees/<%= student.id %>" target="_blank">Fees tab</a> instead.
                     </p>
 
                     <div class="row">

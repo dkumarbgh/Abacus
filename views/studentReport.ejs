@@ -165,10 +165,10 @@
                 <% } else { %>
                     <p>Total Outstanding: <b>₹<%= feeInfo.totalDue %></b></p>
                     <table class="table table-sm table-bordered">
-                        <thead><tr><th>Fee</th><th>Amount</th><th>Discount</th><th>Paid</th><th>Due</th></tr></thead>
+                        <thead><tr><th>Fee</th><th>Amount</th><th>Discount</th><th>Paid</th><th>Due</th><th>Due Date</th><th>Paid Date</th></tr></thead>
                         <tbody>
                             <% if (feeInfo.feeItems.length === 0) { %>
-                                <tr><td colspan="5" class="text-center">No fee structure for this class</td></tr>
+                                <tr><td colspan="7" class="text-center">No fee structure for this class</td></tr>
                             <% } %>
                             <% feeInfo.feeItems.forEach(f => { %>
                                 <tr class="<%= f.due > 0 ? 'table-warning' : '' %>">
@@ -187,6 +187,14 @@
                                     </td>
                                     <td>₹<%= f.paid %></td>
                                     <td>₹<%= f.due %></td>
+                                    <td>
+                                        <% if (f.due_date) { %>
+                                            <%= f.due_date %><% if (f.due > 0 && f.due_date < today) { %> <span class="badge bg-danger">Overdue</span><% } %>
+                                        <% } else { %>
+                                            &mdash;
+                                        <% } %>
+                                    </td>
+                                    <td><% if (f.paidDate) { %><%= f.paidDate %><% } else { %>&mdash;<% } %></td>
                                 </tr>
                             <% }) %>
                         </tbody>

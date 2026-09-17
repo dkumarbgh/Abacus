@@ -1,0 +1,230 @@
+<%- include("../partials/header") %>
+<%- include("../partials/navbar") %>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><%= student.name %> &mdash; Fees</h2>
+    <div>
+        <a href="/fee-payments/<%= student.id %>" class="btn btn-outline-success btn-sm">💵 Collect Payment</a>
+        <a href="/students/edit/<%= student.id %>" class="btn btn-outline-secondary btn-sm">← Back to Student</a>
+    </div>
+</div>
+
+<p class="small text-muted">
+    Tuition Fee and Books Fee are tracked separately below, each with its own total and its own payment
+    schedule - pay in one shot, split evenly over a number of months, or lay out a fully custom set of
+    installments. Payments happen on the <a href="/fee-payments/<%= student.id %>">Collect Payment</a> page;
+    this page is where each fee's total/schedule is set up. Paid/pending amounts here and on every report
+    (Fees Due, Fees Pending, Fee Collection Summary, Student Report) always add Tuition + Books together
+    automatically.
+</p>
+
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-4">
+                <div class="small text-muted">Total (Tuition + Books)</div>
+                <div class="fs-4">₹<%= combinedTotal %></div>
+            </div>
+            <div class="col-4">
+                <div class="small text-muted">Paid</div>
+                <div class="fs-4 text-success">₹<%= combinedPaid %></div>
+            </div>
+            <div class="col-4">
+                <div class="small text-muted">Pending</div>
+                <div class="fs-4 <%= combinedDue > 0 ? 'text-danger' : 'text-success' %>">₹<%= combinedDue %></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%
+    const components = [
+        { key: "tuition", title: "Tuition Fee", data: tuition },
+        { key: "books", title: "Books Fee", data: books }
+    ];
+%>
+
+<% components.forEach(function(c) { %>
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><%= c.title %></h5>
+        </div>
+        <div class="card-body">
+
+            <% if (c.data.items.length === 0 && c.data.templateApplied) { %>
+                <p class="small text-muted mb-2">
+                    <i>Prefilled from the saved <%= levelName || "school-wide" %> template below - adjust and save.</i>
+                </p>
+            <% } %>
+
+            <% if (c.data.items.length === 0) { %>
+                <p class="text-muted mb-3">No <%= c.title %> set up yet for this student.</p>
+            <% } else { %>
+                <table class="table table-bordered table-sm mb-3">
+                    <thead class="table-light">
+                        <tr><th>Period</th><th>Due Date</th><th>Amount</th><th>Paid</th><th>Due</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        <% c.data.items.forEach(function(item) { %>
+                            <tr class="<%= item.due > 0 ? 'table-warning' : 'table-success' %>">
+                                <td><%= item.installment_label || "One-time" %></td>
+                                <td><%= item.due_date || "-" %></td>
+                                <td>₹<%= item.netAmount %></td>
+                                <td>₹<%= item.paid %></td>
+                                <td>₹<%= item.due %></td>
+                                <td>
+                                    <% if (item.due > 0) { %>
+                                        <span class="badge bg-danger">Pending</span>
+                                    <% } else { %>
+                                        <span class="badge bg-success">Paid</span>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                    <tfoot>
+                        <tr class="fw-bold">
+                            <td colspan="2">Total</td>
+                            <td>₹<%= c.data.totalAmount %></td>
+                            <td>₹<%= c.data.totalPaid %></td>
+                            <td>₹<%= c.data.totalDue %></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            <% } %>
+
+            <button class="btn btn-outline-primary btn-sm mb-3" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#configure_<%= c.key %>">
+                <%= c.data.items.length ? "Reconfigure" : "Set Up" %> <%= c.title %>
+            </button>
+
+            <div class="collapse <%= c.data.items.length ? "" : "show" %>" id="configure_<%= c.key %>">
+                <div class="border rounded p-3 bg-light">
+                    <p class="small text-muted">
+                        Saving re-syncs this fee's schedule. Any period that's already been paid or
+                        discounted is never removed or overwritten - it stays exactly as it is, even if it
+                        no longer matches what you enter below.
+                    </p>
+                    <form action="/student-fees/<%= student.id %>/<%= c.key %>" method="POST" onsubmit="return prepFormSubmit_<%= c.key %>()">
+
+                        <div class="mb-3">
+                            <label class="form-label">Payment Mode</label>
+                            <select name="mode" class="form-select" id="mode_<%= c.key %>" onchange="toggleMode_<%= c.key %>()" required>
+                                <option value="single" <%= c.data.prefill.mode === "single" ? "selected" : "" %>>One Shot (single payment)</option>
+                                <option value="monthly" <%= c.data.prefill.mode === "monthly" ? "selected" : "" %>>Monthly (split evenly)</option>
+                                <option value="custom" <%= c.data.prefill.mode === "custom" ? "selected" : "" %>>Custom (define each installment)</option>
+                            </select>
+                        </div>
+
+                        <div class="row" id="fields_total_<%= c.key %>">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Total Amount</label>
+                                <input type="number" step="0.01" name="total_amount" class="form-control"
+                                       id="total_amount_<%= c.key %>" value="<%= c.data.prefill.totalAmount || '' %>">
+                            </div>
+                        </div>
+
+                        <div id="fields_single_<%= c.key %>" class="mode-fields">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Due Date (optional)</label>
+                                    <input type="date" name="single_due_date" class="form-control"
+                                           value="<%= c.data.prefill.singleDueDate || '' %>">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="fields_monthly_<%= c.key %>" class="mode-fields" style="display:none">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">Number of Months</label>
+                                    <input type="number" min="1" name="months" class="form-control"
+                                           value="<%= c.data.prefill.months || 10 %>">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">First Month Starts</label>
+                                    <input type="date" name="start_date" class="form-control"
+                                           value="<%= c.data.prefill.startDate || today %>">
+                                </div>
+                            </div>
+                            <p class="small text-muted">Split evenly across the months (last month adjusts for any rounding).</p>
+                        </div>
+
+                        <div id="fields_custom_<%= c.key %>" class="mode-fields" style="display:none">
+                            <div id="installmentsContainer_<%= c.key %>">
+                                <% const prefillRows = c.data.prefill.installments.length ? c.data.prefill.installments : [{ label: "", amount: "", due_date: "" }]; %>
+                                <% prefillRows.forEach(function(row) { %>
+                                    <div class="row installment-row">
+                                        <div class="col-md-4 mb-2">
+                                            <label class="form-label small">Label</label>
+                                            <input type="text" name="installment_label" class="form-control" placeholder="e.g. Term 1" value="<%= row.label || '' %>">
+                                        </div>
+                                        <div class="col-md-4 mb-2">
+                                            <label class="form-label small">Amount</label>
+                                            <input type="number" step="0.01" name="installment_amount" class="form-control" value="<%= row.amount || '' %>">
+                                        </div>
+                                        <div class="col-md-4 mb-2">
+                                            <label class="form-label small">Due Date</label>
+                                            <input type="date" name="installment_due_date" class="form-control" value="<%= row.due_date || '' %>">
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="addInstallmentRow_<%= c.key %>()">+ Add Installment</button>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="save_template_<%= c.key %>"
+                                   name="save_as_template" value="1" checked>
+                            <label class="form-check-label small" for="save_template_<%= c.key %>">
+                                Save these amounts as the <%= levelName || "school-wide" %> template, so the next
+                                student's <%= c.title %> starts prefilled with them (due dates are never templated -
+                                you'll still enter those fresh each time).
+                            </label>
+                        </div>
+
+                        <button class="btn btn-success" type="submit">Save <%= c.title %> Schedule</button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function toggleMode_<%= c.key %>() {
+            const mode = document.getElementById('mode_<%= c.key %>').value;
+            document.getElementById('fields_total_<%= c.key %>').style.display = (mode === 'custom') ? 'none' : '';
+            document.getElementById('fields_single_<%= c.key %>').style.display = (mode === 'single') ? '' : 'none';
+            document.getElementById('fields_monthly_<%= c.key %>').style.display = (mode === 'monthly') ? '' : 'none';
+            document.getElementById('fields_custom_<%= c.key %>').style.display = (mode === 'custom') ? '' : 'none';
+        }
+        function addInstallmentRow_<%= c.key %>() {
+            const container = document.getElementById('installmentsContainer_<%= c.key %>');
+            const row = document.createElement('div');
+            row.className = 'row installment-row';
+            row.innerHTML = `
+                <div class="col-md-4 mb-2">
+                    <label class="form-label small">Label</label>
+                    <input type="text" name="installment_label" class="form-control" placeholder="e.g. Term 2">
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label small">Amount</label>
+                    <input type="number" step="0.01" name="installment_amount" class="form-control">
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label small">Due Date</label>
+                    <input type="date" name="installment_due_date" class="form-control">
+                </div>
+            `;
+            container.appendChild(row);
+        }
+        function prepFormSubmit_<%= c.key %>() {
+            return true;
+        }
+        toggleMode_<%= c.key %>();
+    </script>
+<% }) %>
+
+<%- include("../partials/footer") %>

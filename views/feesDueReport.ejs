@@ -7,6 +7,9 @@
 
 <form method="GET" action="/reports/fees-due" class="row g-2 mb-3">
     <div class="col-md-3">
+        <input type="text" name="student_name" class="form-control" placeholder="🔍 Search by student name..." value="<%= student_name %>">
+    </div>
+    <div class="col-md-3">
         <select name="level_id" class="form-select" onchange="this.form.submit()">
             <option value="">All Levels</option>
             <% levels.forEach(l => { %>
@@ -34,10 +37,13 @@
         <input type="month" name="month" class="form-control" value="<%= month %>" onchange="this.form.submit()">
         <small class="text-muted">Only show dues falling in this month.</small>
     </div>
-    <% if (month) { %>
+    <div class="col-md-3 d-flex align-items-start">
+        <button class="btn btn-primary btn-sm">🔍 Search / Apply Filters</button>
+    </div>
+    <% if (month || student_name) { %>
         <div class="col-md-3 d-flex align-items-start">
             <% const qs = new URLSearchParams(); if (level_id) qs.set('level_id', level_id); if (class_id) qs.set('class_id', class_id); if (branch_id) qs.set('branch_id', branch_id); const qsStr = qs.toString(); %>
-            <a href="/reports/fees-due<%= qsStr ? '?' + qsStr : '' %>" class="btn btn-outline-secondary btn-sm">Clear Month Filter</a>
+            <a href="/reports/fees-due<%= qsStr ? '?' + qsStr : '' %>" class="btn btn-outline-secondary btn-sm">Clear Search &amp; Month Filter</a>
         </div>
     <% } %>
 </form>

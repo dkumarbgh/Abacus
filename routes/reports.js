@@ -637,19 +637,29 @@ function computeDuesByClass(schoolId, classId, callback) {
                             );
 
                             const feeItems = structures.map(fs => {
-                                const paid = allPayments
-                                    .filter(p => p.student_id === student.id && p.fee_structure_id === fs.id)
-                                    .reduce((sum, p) => sum + p.amount_paid, 0);
+                                const itemPayments = allPayments
+                                    .filter(p => p.student_id === student.id && p.fee_structure_id === fs.id);
+                                const paid = itemPayments.reduce((sum, p) => sum + p.amount_paid, 0);
+                                // Most recent payment date against this item, for the Student
+                                // Report's Fee Status table - null if nothing's been paid yet.
+                                const paidDate = itemPayments.length
+                                    ? itemPayments.reduce((latest, p) => (!latest || p.payment_date > latest) ? p.payment_date : latest, null)
+                                    : null;
                                 const discount = allDiscounts.find(
                                     d => d.student_id === student.id && d.fee_structure_id === fs.id
                                 ) || null;
                                 const netAmount = computeNetAmount(fs.amount, discount);
                                 return {
                                     ...fs,
-                                    // Due date now comes from the student's own record, not the
-                                    // (shared, class-wide) fee_structure row - see Student > Edit.
-                                    due_date: student.fee_due_date || null,
+                                    // Prefer this fee item's OWN due date (set per-period by Tuition/
+                                    // Books schedules from the student's Fees tab - see
+                                    // services/studentFeeComponents.js) so a Monthly/Custom schedule's
+                                    // periods show their real individual due dates. Older class/level-
+                                    // wide items never set fs.due_date, so they fall back to the
+                                    // student's own single fee_due_date record exactly as before.
+                                    due_date: fs.due_date || student.fee_due_date || null,
                                     paid,
+                                    paidDate,
                                     discount,
                                     discountAmount: computeDiscountAmount(fs.amount, discount),
                                     netAmount,
@@ -682,7 +692,7 @@ function computeDuesByClass(schoolId, classId, callback) {
 =========================================== */
 router.get("/fees-due", (req, res) => {
 
-    const { level_id, month, class_id, branch_id } = req.query;
+    const { level_id, month, class_id, branch_id, student_name } = req.query;
     const schoolId = req.schoolId;
 
     // Fetch everyone (not scoped by class/level in computeDuesByClass -
@@ -694,6 +704,7 @@ router.get("/fees-due", (req, res) => {
         if (err) return res.send(err.message);
 
         const today = new Date().toISOString().slice(0, 10);
+        const nameSearch = (student_name || "").trim().toLowerCase();
 
         // Flatten to one row per (student, fee item) that still has a due amount and a due date
         const rows = [];
@@ -701,6 +712,7 @@ router.get("/fees-due", (req, res) => {
             if (level_id && String(r.student.level_id) !== String(level_id)) return;
             if (class_id && String(r.student.class_id) !== String(class_id)) return;
             if (branch_id && String(r.student.branch_id) !== String(branch_id)) return;
+            if (nameSearch && !r.student.name.toLowerCase().includes(nameSearch)) return;
             r.feeItems.forEach(f => {
                 if (f.due > 0 && f.due_date) {
                     // Optional month filter - "which fees are due THIS
@@ -733,6 +745,7 @@ router.get("/fees-due", (req, res) => {
                     rows, levels, branches, classes,
                     level_id: level_id || "", month: month || "",
                     class_id: class_id || "", branch_id: branch_id || "",
+                    student_name: student_name || "",
                     simpleFeeMode
                 }))
                 .catch(err3 => res.send(err3.message));
@@ -750,7 +763,7 @@ router.get("/fees-due", (req, res) => {
 =========================================== */
 router.get("/fees-pending", (req, res) => {
 
-    const { batch_id, level_id, class_id, branch_id } = req.query;
+    const { batch_id, level_id, class_id, branch_id, student_name } = req.query;
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
@@ -767,6 +780,10 @@ router.get("/fees-pending", (req, res) => {
         if (level_id) { pending = pending.filter(r => String(r.student.level_id) === String(level_id)); }
         if (class_id) { pending = pending.filter(r => String(r.student.class_id) === String(class_id)); }
         if (branch_id) { pending = pending.filter(r => String(r.student.branch_id) === String(branch_id)); }
+        if (student_name) {
+            const nameSearch = student_name.trim().toLowerCase();
+            pending = pending.filter(r => r.student.name.toLowerCase().includes(nameSearch));
+        }
 
         Promise.all([
             dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
@@ -780,6 +797,7 @@ router.get("/fees-pending", (req, res) => {
                     pending, batches, levels, branches, classes,
                     batch_id: batch_id || "", level_id: level_id || "",
                     class_id: class_id || "", branch_id: branch_id || "",
+                    student_name: student_name || "",
                     simpleFeeMode
                 }))
                 .catch(err3 => res.send(err3.message));
@@ -792,7 +810,7 @@ router.get("/fees-pending", (req, res) => {
 
 router.post("/fees-pending/remind", (req, res) => {
 
-    const { batch_id, level_id, class_id, branch_id } = req.body;
+    const { batch_id, level_id, class_id, branch_id, student_name } = req.body;
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
@@ -806,6 +824,10 @@ router.post("/fees-pending/remind", (req, res) => {
         if (level_id) { pending = pending.filter(r => String(r.student.level_id) === String(level_id)); }
         if (class_id) { pending = pending.filter(r => String(r.student.class_id) === String(class_id)); }
         if (branch_id) { pending = pending.filter(r => String(r.student.branch_id) === String(branch_id)); }
+        if (student_name) {
+            const nameSearch = student_name.trim().toLowerCase();
+            pending = pending.filter(r => r.student.name.toLowerCase().includes(nameSearch));
+        }
 
         getSimpleFeeMode(schoolId).then(simpleFeeMode => {
 
@@ -824,6 +846,7 @@ router.post("/fees-pending/remind", (req, res) => {
             if (level_id) qs.set("level_id", level_id);
             if (class_id) qs.set("class_id", class_id);
             if (branch_id) qs.set("branch_id", branch_id);
+            if (student_name) qs.set("student_name", student_name);
             const qsStr = qs.toString();
             res.redirect(`/reports/fees-pending${qsStr ? "?" + qsStr : ""}`);
             sendBulk(recipients, 3000);
@@ -844,7 +867,7 @@ router.post("/fees-pending/remind", (req, res) => {
 =========================================== */
 router.get("/fees-summary", (req, res) => {
 
-    const { batch_id, level_id, class_id, branch_id, status } = req.query;
+    const { batch_id, level_id, class_id, branch_id, status, student_name } = req.query;
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
@@ -856,6 +879,10 @@ router.get("/fees-summary", (req, res) => {
         if (level_id) { rows = rows.filter(r => String(r.student.level_id) === String(level_id)); }
         if (class_id) { rows = rows.filter(r => String(r.student.class_id) === String(class_id)); }
         if (branch_id) { rows = rows.filter(r => String(r.student.branch_id) === String(branch_id)); }
+        if (student_name) {
+            const nameSearch = student_name.trim().toLowerCase();
+            rows = rows.filter(r => r.student.name.toLowerCase().includes(nameSearch));
+        }
 
         const summarized = rows.map(r => {
             const totalFee = r.feeItems.reduce((sum, f) => sum + f.netAmount, 0);
@@ -885,6 +912,7 @@ router.get("/fees-summary", (req, res) => {
                     grandTotalFee, grandTotalPaid, grandTotalDue,
                     batch_id: batch_id || "", level_id: level_id || "",
                     class_id: class_id || "", branch_id: branch_id || "", status: status || "",
+                    student_name: student_name || "",
                     simpleFeeMode
                 }))
                 .catch(err3 => res.send(err3.message));
@@ -1133,7 +1161,8 @@ router.get("/student/:id", (req, res) => {
                                         paymentHistory,
                                         examResults,
                                         simpleFeeMode,
-                                        monthlyRegularity
+                                        monthlyRegularity,
+                                        today: new Date().toISOString().slice(0, 10)
                                     });
                                 }).catch(err2 => res.send(err2.message));
 

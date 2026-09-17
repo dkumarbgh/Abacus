@@ -69,7 +69,7 @@
             <th>Level</th>
             <th>WhatsApp 1 Number</th>
             <th>Face Enrolled</th>
-            <th width="320">Action</th>
+            <th width="380">Action</th>
         </tr>
     </thead>
     <tbody>
@@ -100,6 +100,7 @@
                     <a href="/students/enroll-face/<%= student.id %>" class="btn btn-info btn-sm">📷 Face</a>
                 <% } %>
                 <a href="/reports/student/<%= student.id %>" class="btn btn-outline-primary btn-sm">📄 Report</a>
+                <a href="/student-fees/<%= student.id %>" class="btn btn-outline-success btn-sm">💰 Fees</a>
                 <a href="/students/delete/<%= student.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this student?')">Delete</a>
             </td>
         </tr>

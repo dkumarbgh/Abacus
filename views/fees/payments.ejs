@@ -51,7 +51,10 @@
                     <td><%= s.name %></td>
                     <td><%= s.admission_no || "-" %></td>
                     <td><%= s.level_name || "-" %></td>
-                    <td><a href="/fee-payments/<%= s.id %>" class="btn btn-success btn-sm"><%= t('fees.collect_fee') %></a></td>
+                    <td>
+                        <a href="/fee-payments/<%= s.id %>" class="btn btn-success btn-sm"><%= t('fees.collect_fee') %></a>
+                        <a href="/student-fees/<%= s.id %>" class="btn btn-outline-primary btn-sm">Tuition &amp; Books</a>
+                    </td>
                 </tr>
             <% }) %>
         </tbody>
@@ -63,9 +66,12 @@
     <div class="card shadow mb-4">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><%= student.name %> &mdash; <%= t('fees.fee_dues_heading') %></h5>
-            <% if (simpleFeeMode) { %>
-                <span class="badge bg-warning text-dark"><%= t('fees.simple_mode_badge') %></span>
-            <% } %>
+            <div>
+                <a href="/student-fees/<%= student.id %>" class="btn btn-light btn-sm">Manage Tuition &amp; Books</a>
+                <% if (simpleFeeMode) { %>
+                    <span class="badge bg-warning text-dark"><%= t('fees.simple_mode_badge') %></span>
+                <% } %>
+            </div>
         </div>
         <div class="card-body">
 
