@@ -98,9 +98,11 @@
     <div class="card-body text-center">
         <% if (qrImage) { %>
             <p>Scan this from your phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device</p>
-            <img src="<%= qrImage %>" alt="WhatsApp QR code" style="max-width:280px">
+            <img id="whatsappQrImg" src="<%= qrImage %>" alt="WhatsApp QR code" style="max-width:280px">
             <p class="small text-muted mt-2">
-                QR codes expire after about a minute - refresh this page to see the latest one if it stops scanning.
+                This code refreshes itself automatically every few seconds - no need to reload the page while
+                lining up your phone. (A QR code you left sitting on screen for a while, e.g. from a previous
+                page load, is a common cause of "could not link the device" - it had already rotated.)
             </p>
         <% } else if (diagnostics.chromeExists === false) { %>
             <p class="text-danger">
@@ -118,8 +120,41 @@
         <% } else { %>
             <p class="text-muted">No QR code captured yet - it may still be starting up, or a session is being restored from disk. Refresh in a few seconds.</p>
         <% } %>
+        <div class="alert alert-secondary text-start small mt-3 mb-0">
+            <strong>If the QR code looks fine but scanning still says it couldn't link:</strong>
+            <ul class="mb-0 ps-3">
+                <li>WhatsApp caps a phone number at 4 linked devices - if this school's number is already at that limit on other computers/tools, remove one under WhatsApp &gt; Settings &gt; Linked Devices before trying again.</li>
+                <li>Make sure the phone has an active internet connection while scanning - WhatsApp needs it to complete the handshake, even though the scan itself is just a camera action.</li>
+                <li>If it still fails, click "auth_failure" or "Last error" above after a retry, or stop the app, delete the <code>whatsapp-session</code> folder, and restart to force a completely fresh session.</li>
+            </ul>
+        </div>
     </div>
 </div>
+<script>
+(function () {
+    let stopped = false;
+    async function poll() {
+        if (stopped) return;
+        try {
+            const res = await fetch('/whatsapp/status');
+            const data = await res.json();
+            if (data.ready) { stopped = true; location.reload(); return; }
+            const img = document.getElementById('whatsappQrImg');
+            if (data.qrImage && img && img.src !== data.qrImage) {
+                img.src = data.qrImage;
+            } else if (data.qrImage && !img) {
+                stopped = true;
+                location.reload();
+                return;
+            }
+        } catch (e) {
+            // Transient fetch failure - just try again on the next tick.
+        }
+        setTimeout(poll, 4000);
+    }
+    poll();
+})();
+</script>
 <% } %>
 
 <div class="card shadow">

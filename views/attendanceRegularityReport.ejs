@@ -93,7 +93,7 @@
     <div class="col-md-3">
         <div class="card shadow-sm"><div class="card-body text-center">
             <div class="fs-3 fw-bold text-muted"><%= unclassifiedCount %></div>
-            <div class="text-muted small">No Batch Set</div>
+            <div class="text-muted small">No Schedule Set</div>
         </div></div>
     </div>
 </div>
@@ -113,7 +113,7 @@
                 <td><%= r.batch_name || '-' %></td>
                 <td><%= r.class_name || '-' %></td>
                 <td><%= r.branch_name || '-' %></td>
-                <td><%= r.expected == null ? '-' : r.attended %></td>
+                <td><%= r.attended %></td>
                 <td><%= r.expected == null ? '-' : r.expected %></td>
                 <td><%= r.pct == null ? '-' : r.pct + '%' %></td>
                 <td>
@@ -122,7 +122,7 @@
                     <% } else if (r.status === 'Irregular') { %>
                         <span class="badge bg-danger">Irregular</span>
                     <% } else { %>
-                        <span class="badge bg-secondary">No batch / not set</span>
+                        <span class="badge bg-secondary" title="Attendance is recorded (see Attended) but there's no sessions/week or weekly schedule set for this student's batch, so an Expected count and % can't be calculated.">No schedule set</span>
                     <% } %>
                 </td>
             </tr>

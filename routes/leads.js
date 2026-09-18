@@ -3,12 +3,14 @@ const router = express.Router();
 const db = require("../config/database");
 const crypto = require("crypto");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { sendToPhones } = require("../services/whatsappClient");
 const { sendEmail } = require("../services/emailClient");
 const { applyReferralReward } = require("../services/referralReward");
 const features = require("../config/features");
 
 router.use(requireLogin);
+router.use(requireCapability("leads"));
 
 /**
  * Short, human-readable, hard-to-confuse coupon code - avoids visually

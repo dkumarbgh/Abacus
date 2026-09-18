@@ -26,6 +26,9 @@
             <% if (student.date_of_joining) { %>
                 <div class="text-muted small">Joined: <%= student.date_of_joining %></div>
             <% } %>
+            <% if (student.remarks) { %>
+                <div class="text-muted small"><strong>Remarks:</strong> <%= student.remarks %></div>
+            <% } %>
         </div>
     </div>
 </div>

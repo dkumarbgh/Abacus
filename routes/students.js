@@ -5,6 +5,7 @@ const multer = require("multer");
 const path = require("path");
 const { getFaceEncoding } = require("../services/faceRecognition");
 const { requireLogin, requireFeature, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { logChange } = require("../services/auditLog");
 const { assignExplicitOrActivePlans } = require("../services/feePlanGenerator");
 
@@ -32,11 +33,11 @@ function getFeePlansForDropdown(schoolId) {
     });
 }
 const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, assignNextAdmissionNo } = require("../services/schoolSettings");
-const { saveEnrollmentFee, parseInstallmentsFromBody } = require("../services/enrollmentFee");
 const ExcelJS = require("exceljs");
 const { STUDENT_COLUMNS } = require("../services/studentColumns");
 
 router.use(requireLogin);
+router.use(requireCapability("students"));
 
 function dbAll(sql, params) {
     return new Promise((resolve, reject) => {
@@ -112,7 +113,8 @@ const EXTENDED_FIELDS = [
     "mother_tongue", "mother_name", "father_name", "mother_occupation", "father_occupation",
     "mother_phone", "father_phone", "mother_email", "father_email",
     "previous_school", "stream", "standard", "religion", "nationality", "country", "state", "city",
-    "total_hours_per_month", "course_id", "batch_id", "level_id", "branch_id"
+    "total_hours_per_month", "course_id", "batch_id", "level_id", "branch_id",
+    "remarks"
 ];
 
 // Server-side fallback for Age auto-calculation from Date of Birth, in case
@@ -556,7 +558,7 @@ router.get("/add", (req, res) => {
 ===================================================== */
 router.post("/add", upload.single("photo"), (req, res) => {
 
-    const { name, class_id, age, total_fee, discount_type, discount_value } = req.body;
+    const { name, class_id, age } = req.body;
     const photo_path = req.file ? `/uploads/students/${req.file.filename}` : null;
     const schoolId = req.schoolId;
 
@@ -666,17 +668,6 @@ router.post("/add", upload.single("photo"), (req, res) => {
                     });
                 }
 
-                // Total Fee / Discount / Installments -> real fee records.
-                saveEnrollmentFee({
-                    studentId,
-                    classId: class_id,
-                    schoolId,
-                    totalFee: total_fee,
-                    discountType: discount_type,
-                    discountValue: discount_value,
-                    installments: parseInstallmentsFromBody(req.body)
-                }).catch(err2 => console.error("Enrollment fee save failed for student", studentId, ":", err2.message));
-
                 // If a photo was uploaded, try to enroll it for face-recognition attendance right away.
                 if (req.file && require("../config/features").faceRecognition) {
                     getFaceEncoding(req.file.path).then((result) => {
@@ -762,7 +753,7 @@ router.get("/edit/:id", (req, res) => {
 ===================================================== */
 router.post("/edit/:id", upload.single("photo"), (req, res) => {
 
-    const { name, class_id, age, total_fee, discount_type, discount_value } = req.body;
+    const { name, class_id, age } = req.body;
     const schoolId = req.schoolId;
 
     getFieldSettings(schoolId, "student").then(fieldSettings => {
@@ -777,8 +768,9 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
                     db.all("SELECT * FROM classes WHERE school_id=? ORDER BY class_name", [schoolId], (err, rows) => err ? reject(err) : resolve(rows));
                 }),
                 getLookupLists(schoolId),
-                getAdmissionNoSettings(schoolId)
-            ]).then(([classes, lists, admissionNo]) => {
+                getAdmissionNoSettings(schoolId),
+                getFeePlansForDropdown(schoolId)
+            ]).then(([classes, lists, admissionNo, feePlans]) => {
                 // Re-show the form with what they typed, so nothing is lost.
                 const student = { ...req.body, id: req.params.id };
                 const scheduleDays = [].concat(req.body.schedule_days || []).map(Number);
@@ -788,6 +780,7 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
                     fieldSettings,
                     lists,
                     admissionNo,
+                    feePlans,
                     scheduleDays,
                     errors: missing
                 });
@@ -837,19 +830,6 @@ router.post("/edit/:id", upload.single("photo"), (req, res) => {
                         stmt.finalize();
                     }
                 });
-
-                // Total Fee / Discount / Installments -> real fee records
-                // (updates the existing personalized item rather than
-                // duplicating it; only ADDS any newly-entered installments).
-                saveEnrollmentFee({
-                    studentId: req.params.id,
-                    classId: class_id,
-                    schoolId,
-                    totalFee: total_fee,
-                    discountType: discount_type,
-                    discountValue: discount_value,
-                    installments: parseInstallmentsFromBody(req.body)
-                }).catch(err2 => console.error("Enrollment fee save failed for student", req.params.id, ":", err2.message));
 
                 if (req.file && require("../config/features").faceRecognition) {
                     getFaceEncoding(req.file.path).then((result) => {

@@ -5,9 +5,11 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { distributeDocument } = require("../services/distribution");
 
 router.use(requireLogin);
+router.use(requireCapability("practice_sheets"));
 
 const upload = multer({
     storage: multer.diskStorage({

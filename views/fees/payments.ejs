@@ -3,7 +3,7 @@
 
 <h2><%= t('fees.title') %></h2>
 
-<% if (typeof importExportEnabled !== 'undefined' && importExportEnabled && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin')) { %>
+<% if (typeof importExportEnabled !== 'undefined' && importExportEnabled && currentUser && currentUser.roles && (currentUser.roles.includes('Admin') || currentUser.roles.includes('SuperAdmin'))) { %>
     <div class="mb-3">
         <a href="/fee-payments/import" class="btn btn-outline-success btn-sm"><%= t('fees.import_button') %></a>
         <a href="/fee-payments/export" class="btn btn-outline-primary btn-sm"><%= t('fees.export_button') %></a>

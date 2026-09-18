@@ -34,14 +34,18 @@
         </select>
     </div>
     <div class="col-md-3">
-        <input type="month" name="month" class="form-control" value="<%= month %>" onchange="this.form.submit()">
-        <small class="text-muted">Only show dues falling in this month.</small>
+        <label class="form-label mb-0"><small class="text-muted">From month</small></label>
+        <input type="month" name="from_month" class="form-control" value="<%= from_month %>" onchange="this.form.submit()">
     </div>
-    <div class="col-md-3 d-flex align-items-start">
+    <div class="col-md-3">
+        <label class="form-label mb-0"><small class="text-muted">To month</small></label>
+        <input type="month" name="to_month" class="form-control" value="<%= to_month %>" onchange="this.form.submit()">
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
         <button class="btn btn-primary btn-sm">🔍 Search / Apply Filters</button>
     </div>
-    <% if (month || student_name) { %>
-        <div class="col-md-3 d-flex align-items-start">
+    <% if (from_month || to_month || student_name) { %>
+        <div class="col-md-3 d-flex align-items-end">
             <% const qs = new URLSearchParams(); if (level_id) qs.set('level_id', level_id); if (class_id) qs.set('class_id', class_id); if (branch_id) qs.set('branch_id', branch_id); const qsStr = qs.toString(); %>
             <a href="/reports/fees-due<%= qsStr ? '?' + qsStr : '' %>" class="btn btn-outline-secondary btn-sm">Clear Search &amp; Month Filter</a>
         </div>

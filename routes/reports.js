@@ -5,11 +5,13 @@ const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 const { sendBulk } = require("../services/whatsappClient");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
 const { getSimpleFeeMode } = require("../services/schoolSettings");
 const { getElapsedInfo, computeExpected, classifyRegularity } = require("../services/attendanceCalc");
 
 router.use(requireLogin);
+router.use(requireCapability("reports"));
 
 /* ===========================================
    ATTENDANCE AFTER DUE DATE
@@ -394,11 +396,11 @@ router.get("/attendance-detail/excel", async (req, res) => {
             branchName: r.branchName || "",
             month: r.month,
             expected: r.expected == null ? "-" : r.expected,
-            homeAttended: r.expected == null ? "-" : r.homeAttended,
+            homeAttended: r.homeAttended,
             differentAttended: r.differentAttended,
-            totalAttended: r.expected == null ? "-" : r.totalAttended,
+            totalAttended: r.totalAttended,
             pct: r.pct == null ? "-" : r.pct + "%",
-            status: r.status
+            status: r.status == null ? "No schedule set" : r.status
         }));
         sheet.getRow(1).font = { bold: true };
 
@@ -692,7 +694,7 @@ function computeDuesByClass(schoolId, classId, callback) {
 =========================================== */
 router.get("/fees-due", (req, res) => {
 
-    const { level_id, month, class_id, branch_id, student_name } = req.query;
+    const { level_id, from_month, to_month, class_id, branch_id, student_name } = req.query;
     const schoolId = req.schoolId;
 
     // Fetch everyone (not scoped by class/level in computeDuesByClass -
@@ -715,11 +717,17 @@ router.get("/fees-due", (req, res) => {
             if (nameSearch && !r.student.name.toLowerCase().includes(nameSearch)) return;
             r.feeItems.forEach(f => {
                 if (f.due > 0 && f.due_date) {
-                    // Optional month filter - "which fees are due THIS
-                    // month" rather than every pending due regardless of
-                    // when, since the full list can get long/unfocused
-                    // once a school's been running a while.
-                    if (month && !f.due_date.startsWith(month)) return;
+                    // Optional from/to month range filter - "which fees are
+                    // due between these two months" rather than every
+                    // pending due regardless of when, since the full list
+                    // can get long/unfocused once a school's been running a
+                    // while. due_date is stored as YYYY-MM-DD, so a plain
+                    // string comparison on the YYYY-MM slice sorts correctly
+                    // without needing Date parsing. Either end can be left
+                    // blank for an open-ended range.
+                    const dueMonth = f.due_date.slice(0, 7);
+                    if (from_month && dueMonth < from_month) return;
+                    if (to_month && dueMonth > to_month) return;
                     rows.push({
                         student: r.student,
                         fee_name: f.fee_name,
@@ -743,7 +751,8 @@ router.get("/fees-due", (req, res) => {
             getSimpleFeeMode(schoolId)
                 .then(simpleFeeMode => res.render("feesDueReport", {
                     rows, levels, branches, classes,
-                    level_id: level_id || "", month: month || "",
+                    level_id: level_id || "",
+                    from_month: from_month || "", to_month: to_month || "",
                     class_id: class_id || "", branch_id: branch_id || "",
                     student_name: student_name || "",
                     simpleFeeMode

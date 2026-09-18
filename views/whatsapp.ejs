@@ -19,19 +19,55 @@
     <div class="card-body text-center">
         <% if (qrImage) { %>
             <p>Open WhatsApp on your phone &rarr; Settings &gt; Linked Devices &gt; Link a Device, then scan:</p>
-            <img src="<%= qrImage %>" alt="WhatsApp QR code" style="max-width:260px">
+            <img id="whatsappQrImg" src="<%= qrImage %>" alt="WhatsApp QR code" style="max-width:260px">
             <p class="small text-muted mt-2">
-                QR codes expire after about a minute - refresh this page for a new one if it stops scanning.
+                This code refreshes itself automatically every few seconds, so it should always be scannable -
+                no need to reload the page while lining up your phone.
             </p>
         <% } else if (diagnostics.chromeExists === false) { %>
             <p class="text-danger mb-1"><strong>Can't start yet - Chrome isn't available on this server.</strong></p>
             <p class="small text-muted">See <a href="/whatsapp/debug">Full diagnostics</a> for what to fix.</p>
         <% } else { %>
-            <p class="text-muted">Starting up - refresh in a few seconds for the QR code.</p>
+            <p class="text-muted" id="whatsappStartingMsg">Starting up - this will pick up the QR code automatically once it's ready.</p>
         <% } %>
         <button class="btn btn-outline-secondary btn-sm mt-2" onclick="location.reload()">🔄 Refresh</button>
     </div>
 </div>
+<script>
+// Keeps the QR code (and the "connected" state) live without the visitor
+// needing to manually reload at just the right moment - see the comment on
+// GET /whatsapp/status for why a static QR image is the real cause behind
+// most "could not link the device" reports.
+(function () {
+    let stopped = false;
+    async function poll() {
+        if (stopped) return;
+        try {
+            const res = await fetch('/whatsapp/status');
+            const data = await res.json();
+            if (data.ready) {
+                stopped = true;
+                location.reload(); // show the fully-connected page
+                return;
+            }
+            const img = document.getElementById('whatsappQrImg');
+            if (data.qrImage && img && img.src !== data.qrImage) {
+                img.src = data.qrImage;
+            } else if (data.qrImage && !img) {
+                // QR just became available where there was none before (e.g.
+                // Chrome finished starting up) - reload once to render it.
+                stopped = true;
+                location.reload();
+                return;
+            }
+        } catch (e) {
+            // Transient fetch failure - just try again on the next tick.
+        }
+        setTimeout(poll, 4000);
+    }
+    poll();
+})();
+</script>
 <% } %>
 
 <div class="row">

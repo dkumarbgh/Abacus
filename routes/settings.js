@@ -2,10 +2,12 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, getDefaultHoursAttended, getReceiptNoSettings } = require("../services/schoolSettings");
 const { getSchoolLanguage, allKeysGrouped } = require("../services/labels");
 
 router.use(requireLogin);
+router.use(requireCapability("settings"));
 
 /* ==========================================
    VIEW SETTINGS (Admin only)
@@ -15,7 +17,7 @@ router.get("/", requireRole("Admin"), (req, res) => {
     const schoolId = req.schoolId;
 
     db.get(
-        "SELECT simple_fee_mode, language, attendance_import_export_enabled, fees_import_export_enabled FROM schools WHERE id=?",
+        "SELECT simple_fee_mode, language, attendance_import_export_enabled, fees_import_export_enabled, whatsapp_enabled FROM schools WHERE id=?",
         [schoolId],
         (err, school) => {
 
@@ -43,7 +45,8 @@ router.get("/", requireRole("Admin"), (req, res) => {
                                     receiptNo,
                                     language: (school && school.language) || "en",
                                     attendanceImportExportEnabled: !!(school && school.attendance_import_export_enabled),
-                                    feesImportExportEnabled: !!(school && school.fees_import_export_enabled)
+                                    feesImportExportEnabled: !!(school && school.fees_import_export_enabled),
+                                    whatsappEnabled: !!(school && school.whatsapp_enabled)
                                 });
                             });
                         });
@@ -236,6 +239,27 @@ router.post("/import-export-toggles", requireRole("Admin"), (req, res) => {
     db.run(
         "UPDATE schools SET attendance_import_export_enabled=?, fees_import_export_enabled=? WHERE id=?",
         [attendanceEnabled, feesEnabled, req.schoolId],
+        (err) => {
+            if (err) return res.send(err.message);
+            res.redirect("/settings");
+        }
+    );
+
+});
+
+/* ==========================================
+   WHATSAPP ENABLE/DISABLE (Admin only)
+   Per-school toggle - see schools.whatsapp_enabled (config/database.js),
+   middleware/auth.js requireSchoolFeature, and services/whatsappClient.js
+   (sendToPhones checks this before every send, not just the /whatsapp route).
+========================================== */
+router.post("/whatsapp-toggle", requireRole("Admin"), (req, res) => {
+
+    const enabled = req.body.whatsapp_enabled === "on" ? 1 : 0;
+
+    db.run(
+        "UPDATE schools SET whatsapp_enabled=? WHERE id=?",
+        [enabled, req.schoolId],
         (err) => {
             if (err) return res.send(err.message);
             res.redirect("/settings");

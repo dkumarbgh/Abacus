@@ -8,6 +8,7 @@ const ExcelJS = require("exceljs");
 const { getFaceEncoding, findBestMatch } = require("../services/faceRecognition");
 const { getDefaultHoursAttended } = require("../services/schoolSettings");
 const { requireLogin, requireApiAuth, requireFeature, requireSchoolFeature, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { logChange } = require("../services/auditLog");
 
 const upload = multer({
@@ -133,6 +134,7 @@ router.post("/face-mark", requireApiAuth, requireFeature("faceRecognition", { as
 
 // Everything below this line is the web admin interface (session auth).
 router.use(requireLogin);
+router.use(requireCapability("attendance"));
 
 
 /* ===========================================
@@ -152,7 +154,10 @@ router.get("/", (req, res) => {
             roster: [],
             crossBatchEntries: [],
             selectedBatch: "",
-            selectedDate: "",
+            // Default to today so a teacher marking attendance doesn't have
+            // to remember to pick the date every time - see ways-of-working
+            // note on this page for why this matters.
+            selectedDate: new Date().toISOString().slice(0, 10),
             highlightStudentId: "",
             importExportEnabled: !!(schoolRow && schoolRow.attendance_import_export_enabled)
         });
@@ -230,10 +235,11 @@ router.get("/load", (req, res) => {
         // members and any previously-added cross-batch visitors.
         dbAll(
             `SELECT attendance.*, students.name AS student_name, students.admission_no, students.photo_path,
-                    level.name AS level_name
+                    level.name AS level_name, home_batch.name AS home_batch_name
              FROM attendance
              JOIN students ON attendance.student_id = students.id
              LEFT JOIN lookup_items level ON students.level_id = level.id
+             LEFT JOIN lookup_items home_batch ON students.batch_id = home_batch.id
              WHERE attendance.batch_id=? AND attendance.attendance_date=? AND attendance.school_id=?`,
             [batch_id, attendance_date, schoolId]
         ),
@@ -251,7 +257,7 @@ router.get("/load", (req, res) => {
 
         const crossBatchEntries = existingRecords
             .filter(r => r.is_different_batch)
-            .map(r => ({ id: r.student_id, name: r.student_name, admission_no: r.admission_no, photo_path: r.photo_path, level_name: r.level_name, hours: r.hours_attended != null ? r.hours_attended : defaultHours }));
+            .map(r => ({ id: r.student_id, name: r.student_name, admission_no: r.admission_no, photo_path: r.photo_path, level_name: r.level_name, home_batch_name: r.home_batch_name, hours: r.hours_attended != null ? r.hours_attended : defaultHours }));
 
         res.render("attendance", {
             batches, roster, crossBatchEntries, defaultHours,
@@ -395,7 +401,15 @@ router.post("/save", async (req, res) => {
                     // Cross-batch visitors - always Present (there's no
                     // "absent from a batch you don't belong to"), flagged
                     // distinctly so reports can tell home vs. makeup apart.
+                    // A student already on the HOME roster is skipped here
+                    // even if the client somehow submitted them as a
+                    // cross-batch entry too (the search/add UI guards
+                    // against this, but this is a server-side backstop so a
+                    // student can never end up with two attendance rows for
+                    // the same batch+date).
+                    const homeRosterIds = new Set(homeRoster.map(s => String(s.id)));
                     crossBatchIds.forEach(studentId => {
+                        if (homeRosterIds.has(String(studentId))) return;
                         const hours = parseHours(req.body[`hours_${studentId}`], defaultHours);
                         db.run(
                             `INSERT INTO attendance (student_id, attendance_date, status, batch_id, is_different_batch, hours_attended, school_id)
@@ -404,7 +418,13 @@ router.post("/save", async (req, res) => {
                         );
                     });
 
-                    res.redirect("/attendance");
+                    // Back to the SAME loaded roster (not the blank
+                    // Attendance home page) so it's immediately obvious the
+                    // save worked and what got saved - this is also what
+                    // lets a re-visit of this batch+date show the
+                    // already-saved data instead of looking like a blank
+                    // slate that might get duplicated on a second save.
+                    res.redirect(`/attendance/load?batch_id=${encodeURIComponent(batch_id)}&attendance_date=${encodeURIComponent(attendance_date)}`);
 
                     // One summary entry per save action (not per student)
                     // to avoid flooding the log - branch_id is left NULL
@@ -431,7 +451,7 @@ router.post("/save", async (req, res) => {
 /* ===========================================
    EXPORT ATTENDANCE (Excel) - behind the per-school toggle in Settings
 =========================================== */
-router.get("/export", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance"), (req, res) => {
+router.get("/export", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance Import/Export"), (req, res) => {
 
     const schoolId = req.schoolId;
     const { from_date, to_date } = req.query;
@@ -488,7 +508,7 @@ router.get("/export", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("
 /* ===========================================
    IMPORT TEMPLATE (blank, headers only)
 =========================================== */
-router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance"), async (req, res) => {
+router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance Import/Export"), async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Attendance");
@@ -521,7 +541,7 @@ router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchool
    doesn't match a student's own batch_id is treated as a cross-batch
    (makeup-class) entry, same as the manual "add from a different batch" flow.
 =========================================== */
-router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance"), uploadSpreadsheet.single("file"), async (req, res) => {
+router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance Import/Export"), uploadSpreadsheet.single("file"), async (req, res) => {
 
     if (!req.file) return res.render("importAttendance", { result: { error: "Please choose a file to upload." } });
 
@@ -652,7 +672,7 @@ function dbRun(sql, params) {
     return new Promise((resolve, reject) => db.run(sql, params, function(err) { err ? reject(err) : resolve(this); }));
 }
 
-router.get("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance"), (req, res) => {
+router.get("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance Import/Export"), (req, res) => {
     res.render("importAttendance", { result: null });
 });
 

@@ -256,6 +256,30 @@
         </div>
     </div>
 
+    <% if (features.whatsapp) { %>
+    <div class="col-md-7 mt-4">
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white"><h5>WhatsApp</h5></div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Turn WhatsApp off if your school doesn't want to send guardian messages this
+                    way. This hides the WhatsApp menu and blocks all sends for your school -
+                    payment confirmations, fee reminders, and Practice Sheet/Test Paper sharing
+                    included - until it's switched back on.
+                </p>
+                <form action="/settings/whatsapp-toggle" method="POST">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="whatsappEnabled"
+                               name="whatsapp_enabled" <%= whatsappEnabled ? "checked" : "" %>>
+                        <label class="form-check-label" for="whatsappEnabled">Enable WhatsApp</label>
+                    </div>
+                    <button class="btn btn-secondary" type="submit">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <% } %>
+
 </div>
 
 <%- include("partials/footer") %>

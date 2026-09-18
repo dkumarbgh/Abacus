@@ -2,11 +2,13 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { getSimpleFeeMode } = require("../services/schoolSettings");
 const { logChange } = require("../services/auditLog");
 const { assignPlanToLevel } = require("../services/feePlanGenerator");
 
 router.use(requireLogin);
+router.use(requireCapability("fee_structure"));
 
 // View Fee Structure
 router.get("/", (req, res) => {

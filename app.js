@@ -10,7 +10,15 @@ const session = require("express-session");
 
 const db = require("./config/database");
 const { requireLogin } = require("./middleware/auth");
+const { ensureRolesSeeded } = require("./services/capabilities");
 const fs = require("fs");
+
+// Same fire-and-forget pattern as config/database.js's own migrate() call -
+// creates the roles/role_capabilities/user_roles tables and seeds the four
+// built-in roles (Admin/Teacher/Accountant/SuperAdmin) with every
+// capability, so this is a no-op behavior change for every existing
+// install until someone visits Super Admin > Roles & Capabilities.
+ensureRolesSeeded().catch(err => console.error("Role/capability seeding error:", err));
 
 // Multer (file uploads) does NOT create its destination folder if it's
 // missing - the first upload would just crash with ENOENT. Rather than
@@ -76,11 +84,24 @@ app.use(session({
 }));
 
 // Make the logged-in user available to every EJS view as `currentUser`
-// (used by the navbar to show school name / user / admin-only links)
-app.use((req, res, next) => {
-    res.locals.currentUser = req.session && req.session.userId
-        ? { name: req.session.name, role: req.session.role, schoolName: req.session.schoolName }
-        : null;
+// (used by the navbar to show school name / user / admin-only links).
+// `.role` stays the single primary role (unchanged, for anything already
+// comparing against it); `.roles` is the full effective set (primary +
+// any secondary roles - see services/capabilities.js) for views that need
+// to check "does this person hold role X at all".
+app.use(async (req, res, next) => {
+    if (req.session && req.session.userId) {
+        let roles = [req.session.role];
+        try {
+            const { getEffectiveRoleNames } = require("./services/capabilities");
+            roles = await getEffectiveRoleNames(req.session.role, req.session.userId);
+        } catch (e) {
+            // Fall back to just the primary role - never block page render over this.
+        }
+        res.locals.currentUser = { name: req.session.name, role: req.session.role, roles, schoolName: req.session.schoolName };
+    } else {
+        res.locals.currentUser = null;
+    }
     // When a Super Admin is viewing a school as if they were its Admin
     // (see routes/superAdmin.js login-as), this flags it for the navbar so
     // there's always a visible way back to /super-admin - never silently

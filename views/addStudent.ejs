@@ -185,7 +185,7 @@
                     </p>
 
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">
                                 Total Hours in Month
                                 <% if (fieldSettings.total_hours_per_month) { %><span class="text-danger">*</span><% } %>
@@ -194,47 +194,10 @@
                                    value="<%= old.total_hours_per_month || '' %>"
                                    <%= fieldSettings.total_hours_per_month ? "required" : "" %>>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">
-                                Fee Due Date
-                                <% if (fieldSettings.fee_due_date) { %><span class="text-danger">*</span><% } %>
-                            </label>
-                            <input type="date" name="fee_due_date" class="form-control"
-                                   value="<%= old.fee_due_date || '' %>"
-                                   <%= fieldSettings.fee_due_date ? "required" : "" %>>
-                        </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Date of Joining</label>
                             <input type="date" name="date_of_joining" class="form-control"
                                    value="<%= old.date_of_joining || todayDate %>">
-                            <small class="text-muted">Drives Fee Plan periods (Settings &gt; Fee Structure) - fees are only generated from this date onward.</small>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Fee Plan (optional)</label>
-                            <% if (feePlans.length > 0) { %>
-                                <select name="fee_plan_id" class="form-select">
-                                    <option value="">None - handle fees manually / via Fee Structure</option>
-                                    <% feePlans.forEach(function(p) { %>
-                                        <option value="<%= p.id %>" <%= String(old.fee_plan_id)===String(p.id) ? "selected" : "" %>><%= p.label %></option>
-                                    <% }) %>
-                                </select>
-                                <small class="text-muted">
-                                    Generates this student's own fee periods starting from their Date of
-                                    Joining above. Pick the plan matching the family's chosen payment
-                                    frequency - different students on the same Level can pick different ones.
-                                </small>
-                            <% } else { %>
-                                <select class="form-select" disabled>
-                                    <option>No Fee Plans set up yet</option>
-                                </select>
-                                <small class="text-muted">
-                                    Create one under <a href="/fee-structure" target="_blank">Fee Structure &gt; Auto (From Join Date)</a>
-                                    to let a student pick a payment frequency (Monthly/Quarterly/etc.) right here at admission.
-                                </small>
-                            <% } %>
                         </div>
                     </div>
 
@@ -466,53 +429,16 @@
                     </div>
 
                     <hr>
-                    <h6 class="text-muted">Fee &amp; Installments</h6>
-                    <p class="small text-muted">
-                        This creates a personalized fee item just for this student (separate from any
-                        shared Fee Structure for their class) and shows up on the Fee Collection page like any other fee.
-                    </p>
-
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Total Fee</label>
-                            <input type="number" step="0.01" name="total_fee" class="form-control" placeholder="Leave blank if not applicable">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Discount Type</label>
-                            <select name="discount_type" class="form-select">
-                                <option value="FLAT">Flat Amount (₹)</option>
-                                <option value="PERCENT">Percentage (%)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Discount Value</label>
-                            <input type="number" step="0.01" name="discount_value" class="form-control" placeholder="0">
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        <textarea name="remarks" class="form-control" rows="2" placeholder="Any general note about this student (optional)"><%= old.remarks || '' %></textarea>
                     </div>
 
-                    <div id="installmentsContainer">
-                        <div class="row installment-row">
-                            <div class="col-md-4 mb-2">
-                                <label class="form-label small">First Installment Amount</label>
-                                <input type="number" step="0.01" name="installment_amount" class="form-control">
-                            </div>
-                            <div class="col-md-4 mb-2">
-                                <label class="form-label small">Date</label>
-                                <input type="date" name="installment_date" class="form-control">
-                            </div>
-                            <div class="col-md-4 mb-2">
-                                <label class="form-label small">Mode</label>
-                                <select name="installment_mode" class="form-select">
-                                    <option>Cash</option>
-                                    <option>UPI</option>
-                                    <option>Card</option>
-                                    <option>Bank Transfer</option>
-                                    <option>Cheque</option>
-                                </select>
-                            </div>
-                        </div>
+                    <hr>
+                    <div class="alert alert-info small mb-3">
+                        Tuition and Books fees are set up separately, after saving this student, from
+                        their <strong>Fees</strong> page (linked from the student list and Edit Student).
                     </div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="addInstallmentRow()">+ Add Installment</button>
 
                     <hr>
                     <h6 class="text-muted">Photo<% if (features.faceRecognition) { %> (used for face-recognition attendance)<% } %></h6>
@@ -535,33 +461,6 @@
 </div>
 
 <script>
-function addInstallmentRow() {
-    const container = document.getElementById('installmentsContainer');
-    const row = document.createElement('div');
-    row.className = 'row installment-row';
-    row.innerHTML = `
-        <div class="col-md-4 mb-2">
-            <label class="form-label small">Installment Amount</label>
-            <input type="number" step="0.01" name="installment_amount" class="form-control">
-        </div>
-        <div class="col-md-4 mb-2">
-            <label class="form-label small">Date</label>
-            <input type="date" name="installment_date" class="form-control">
-        </div>
-        <div class="col-md-4 mb-2">
-            <label class="form-label small">Mode</label>
-            <select name="installment_mode" class="form-select">
-                <option>Cash</option>
-                <option>UPI</option>
-                <option>Card</option>
-                <option>Bank Transfer</option>
-                <option>Cheque</option>
-            </select>
-        </div>
-    `;
-    container.appendChild(row);
-}
-
 // Auto-calculate Age from Date of Birth. Age stays editable by hand -
 // this just fills/updates it whenever DOB changes.
 (function() {

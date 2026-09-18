@@ -88,7 +88,7 @@
                     </ul>
                 </li>
 
-                <% if (features.whatsapp) { %>
+                <% if (features.whatsapp && typeof schoolWhatsappEnabled !== 'undefined' && schoolWhatsappEnabled) { %>
                 <li class="nav-item">
                     <a class="nav-link" href="/whatsapp">
                         💬 WhatsApp
@@ -106,7 +106,7 @@
 
             <ul class="navbar-nav">
 
-                <% if (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'Admin') { %>
+                <% if (typeof currentUser !== 'undefined' && currentUser && currentUser.roles && currentUser.roles.includes('Admin')) { %>
                 <li class="nav-item">
                     <a class="nav-link" href="/users">
                         👤 Users
@@ -127,7 +127,7 @@
                 <% if (typeof currentUser !== 'undefined' && currentUser) { %>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle text-white-50" href="#" data-bs-toggle="dropdown">
-                        <%= currentUser.name %> (<%= currentUser.role %>)
+                        <%= currentUser.name %> (<%= (currentUser.roles || [currentUser.role]).join(', ') %>)
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><h6 class="dropdown-header"><%= currentUser.schoolName %></h6></li>

@@ -1015,6 +1015,19 @@ async function migrate() {
     await addColumnIfMissing("schools", "attendance_import_export_enabled", "INTEGER NOT NULL DEFAULT 0");
     await addColumnIfMissing("schools", "fees_import_export_enabled", "INTEGER NOT NULL DEFAULT 0");
 
+    // Per-school WhatsApp toggle (separate from FEATURE_WHATSAPP in
+    // config/features.js, which is a deployment-wide env flag). Defaults to
+    // ON (1) - unlike the import/export toggles above, WhatsApp is an
+    // existing feature every school already uses, so an existing
+    // deployment must keep working unchanged until an Admin explicitly
+    // turns it off for their school from Settings.
+    await addColumnIfMissing("schools", "whatsapp_enabled", "INTEGER NOT NULL DEFAULT 1");
+
+    // Free-text staff notes/remarks per student (e.g. "sibling discount
+    // agreed verbally", "moving branches next term") - not tied to any
+    // specific form section, just a general note field on Add/Edit Student.
+    await addColumnIfMissing("students", "remarks", "TEXT");
+
     // Optional Exam Fee: when set, an Exam is linked to a normal
     // fee_structure row (auto-created for it - see routes/exams.js),
     // so the fee shows up in every existing fee screen (Fee Dues, Fee

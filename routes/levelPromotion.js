@@ -2,9 +2,11 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { renderCertificates } = require("../services/certificateGenerator");
 
 router.use(requireLogin);
+router.use(requireCapability("level_promotion"));
 
 /* ==========================================
    PROMOTE LEVEL - selection page (works for single OR bulk: a single

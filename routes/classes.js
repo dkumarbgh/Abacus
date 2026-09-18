@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 
 router.use(requireLogin);
+router.use(requireCapability("classes"));
 
 // Display Classes
 router.get("/", (req, res) => {

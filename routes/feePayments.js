@@ -5,6 +5,7 @@ const multer = require("multer");
 const ExcelJS = require("exceljs");
 const { sendToPhones } = require("../services/whatsappClient");
 const { requireLogin, requireSchoolFeature, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { logChange } = require("../services/auditLog");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
 const { assignNextReceiptNo } = require("../services/schoolSettings");
@@ -15,6 +16,7 @@ const uploadSpreadsheet = multer({
 });
 
 router.use(requireLogin);
+router.use(requireCapability("fee_payments"));
 
 /* ==========================================
    SELECT STUDENT TO COLLECT FEES FOR
@@ -54,7 +56,7 @@ router.get("/", (req, res) => {
    route - otherwise Express matches them as if "export"/"import" were a
    studentId, since route matching happens in registration order.
 ========================================== */
-router.get("/export", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments"), (req, res) => {
+router.get("/export", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments Import/Export"), (req, res) => {
 
     const schoolId = req.schoolId;
     const { from_date, to_date } = req.query;
@@ -105,7 +107,7 @@ router.get("/export", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("
 
 });
 
-router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments"), async (req, res) => {
+router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments Import/Export"), async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Fee Payments");
@@ -134,7 +136,7 @@ router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchool
 
 });
 
-router.get("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments"), (req, res) => {
+router.get("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments Import/Export"), (req, res) => {
     res.render("importFeePayments", { result: null });
 });
 
@@ -553,7 +555,7 @@ router.get("/discount/remove/:id", (req, res) => {
    one is auto-assigned using this school's configured format (see
    Settings > Receipt Number Format).
 =========================================== */
-router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments"), uploadSpreadsheet.single("file"), async (req, res) => {
+router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("fees_import_export_enabled", "Fee Payments Import/Export"), uploadSpreadsheet.single("file"), async (req, res) => {
 
     if (!req.file) return res.render("importFeePayments", { result: { error: "Please choose a file to upload." } });
 

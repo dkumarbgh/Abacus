@@ -2,10 +2,12 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { logChange } = require("../services/auditLog");
 const { saveComponent, loadComponent, getTemplate, templateToPrefill, saveTemplate } = require("../services/studentFeeComponents");
 
 router.use(requireLogin);
+router.use(requireCapability("student_fees"));
 
 const COMPONENTS = {
     tuition: "Tuition Fee",

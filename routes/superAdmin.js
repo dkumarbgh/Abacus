@@ -9,6 +9,7 @@ const os = require("os");
 const sqlite3 = require("sqlite3");
 const { requireLogin, requireRole } = require("../middleware/auth");
 const { logChange } = require("../services/auditLog");
+const capabilities = require("../services/capabilities");
 
 // Mirrors the same default used in config/database.js - duplicated here
 // (rather than importing it) because config/database.js exports the open
@@ -124,26 +125,32 @@ router.get("/", (req, res) => {
 /* ===========================================
    ONE SCHOOL - its details + its users
 =========================================== */
-router.get("/schools/:id", (req, res) => {
+router.get("/schools/:id", async (req, res) => {
 
-    db.get("SELECT * FROM schools WHERE id=?", [req.params.id], (err, school) => {
+    try {
+        const roles = await capabilities.getAssignableRoleNames();
 
-        if (err) return res.send(err.message);
-        if (!school) return res.send("School not found");
+        db.get("SELECT * FROM schools WHERE id=?", [req.params.id], (err, school) => {
 
-        db.all(
-            "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
-            [req.params.id],
-            (err2, users) => {
+            if (err) return res.send(err.message);
+            if (!school) return res.send("School not found");
 
-                if (err2) return res.send(err2.message);
+            db.all(
+                "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
+                [req.params.id],
+                (err2, users) => {
 
-                res.render("superAdmin/schoolDetail", { school, users, error: null });
+                    if (err2) return res.send(err2.message);
 
-            }
-        );
+                    res.render("superAdmin/schoolDetail", { school, users, roles, error: null });
 
-    });
+                }
+            );
+
+        });
+    } catch (e) {
+        res.send(e.message);
+    }
 
 });
 
@@ -196,6 +203,18 @@ function dbGetP(sql, params) {
 }
 function dbRunP(sql, params) {
     return new Promise((resolve, reject) => db.run(sql, params, function(err) { err ? reject(err) : resolve(this); }));
+}
+function dbAllP(sql, params) {
+    return new Promise((resolve, reject) => db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows)));
+}
+
+// A handful of user-management routes below are reachable both from a
+// School Detail page AND from the User Matrix (see further down) - this
+// decides where "Cancel"/"Back" and the post-save redirect should land,
+// based on an optional ?return=matrix (GET) / return_to (POST) flag, so
+// neither entry point strands the SuperAdmin on the wrong page.
+function usersReturnTo(schoolId, flag) {
+    return flag === "matrix" ? "/super-admin/user-matrix" : `/super-admin/schools/${schoolId}`;
 }
 
 router.get("/schools/:id/delete-confirm", async (req, res) => {
@@ -321,15 +340,17 @@ router.post("/schools/:id/edit", (req, res) => {
 /* ===========================================
    ADD A USER TO A SPECIFIC SCHOOL
 =========================================== */
-router.post("/schools/:id/users/add", (req, res) => {
+router.post("/schools/:id/users/add", async (req, res) => {
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
     const passwordHash = bcrypt.hashSync(password, 10);
     const schoolId = req.params.id;
+    const roles = await capabilities.getAssignableRoleNames();
+    const role = roles.includes(req.body.role) ? req.body.role : "Teacher";
 
     db.run(
         `INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?,?)`,
-        [schoolId, name, email, passwordHash, role || "Teacher"],
+        [schoolId, name, email, passwordHash, role],
         (err) => {
 
             if (err) {
@@ -339,7 +360,7 @@ router.post("/schools/:id/users/add", (req, res) => {
 
                 return db.get("SELECT * FROM schools WHERE id=?", [schoolId], (err2, school) => {
                     db.all("SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name", [schoolId], (err3, users) => {
-                        res.render("superAdmin/schoolDetail", { school, users: users || [], error: message });
+                        res.render("superAdmin/schoolDetail", { school, users: users || [], roles, error: message });
                     });
                 });
             }
@@ -347,7 +368,7 @@ router.post("/schools/:id/users/add", (req, res) => {
             logChange({
                 schoolId, branchId: null, req,
                 entityType: "User", entityName: `${name} (${email})`, action: "Created",
-                details: `Role: ${role || "Teacher"}`
+                details: `Role: ${role}`
             });
 
             res.redirect(`/super-admin/schools/${schoolId}`);
@@ -361,28 +382,56 @@ router.post("/schools/:id/users/add", (req, res) => {
 /* ===========================================
    EDIT / RESET PASSWORD FOR ANY USER IN ANY SCHOOL
 =========================================== */
-router.get("/schools/:id/users/edit/:userId", (req, res) => {
+router.get("/schools/:id/users/edit/:userId", async (req, res) => {
 
-    db.get(
-        "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
-        [req.params.userId, req.params.id],
-        (err, user) => {
+    try {
+        const roles = await capabilities.getAssignableRoleNames();
+        const allRoles = await capabilities.getAllRolesWithCapabilities();
 
-            if (err) return res.send(err.message);
-            if (!user) return res.send("User not found");
+        db.get(
+            "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
+            [req.params.userId, req.params.id],
+            async (err, user) => {
 
-            res.render("superAdmin/editUser", { user, schoolId: req.params.id, error: null });
+                if (err) return res.send(err.message);
+                if (!user) return res.send("User not found");
 
-        }
-    );
+                // "Additional roles" checklist offers every role except the
+                // one already covering them as their primary role (checking
+                // it too would be a redundant no-op) and SuperAdmin (never
+                // grantable from a per-school user form - see
+                // getAssignableRoleNames).
+                const secondaryRoleNames = await capabilities.getSecondaryRoleNames(user.id);
+                const secondaryChoices = allRoles
+                    .filter(r => r.name !== "SuperAdmin" && r.name !== user.role)
+                    .map(r => ({ id: r.id, name: r.name }));
+
+                res.render("superAdmin/editUser", {
+                    user, schoolId: req.params.id, error: null, roles,
+                    secondaryChoices, secondaryRoleNames,
+                    returnTo: usersReturnTo(req.params.id, req.query.return)
+                });
+
+            }
+        );
+    } catch (e) {
+        res.send(e.message);
+    }
 
 });
 
 router.post("/schools/:id/users/edit/:userId", async (req, res) => {
 
-    const { name, email, role, password } = req.body;
+    const { name, email, password, return_to } = req.body;
     const schoolId = req.params.id;
     const targetId = req.params.userId;
+    const returnTo = usersReturnTo(schoolId, return_to);
+    const assignableRoles = await capabilities.getAssignableRoleNames();
+    const role = assignableRoles.includes(req.body.role) ? req.body.role : "Teacher";
+    // Same normalization as `student`/`cross_batch_student` elsewhere in the
+    // app: a checkbox group posts as an array with 2+ boxes checked, but a
+    // bare string with exactly one - normalize both to an array up front.
+    const secondaryRoleIds = [].concat(req.body.secondary_roles || []).map(Number).filter(n => !isNaN(n));
 
     // Same "don't remove the last Admin" guard as the per-school version.
     if (role !== "Admin") {
@@ -399,7 +448,7 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
         if (current === "Admin" && adminCount === 0) {
             return res.render("superAdmin/editUser", {
                 user: { id: targetId, name, email, role: "Admin" },
-                schoolId,
+                schoolId, returnTo, roles: assignableRoles, secondaryChoices: [], secondaryRoleNames: [],
                 error: "Can't change this user's role - they're the only Admin left for this school."
             });
         }
@@ -418,13 +467,19 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
     db.run(
         `UPDATE users SET ${setClauses.join(", ")} WHERE id=? AND school_id=?`,
         params,
-        (err) => {
+        async (err) => {
 
             if (err) {
                 const message = err.message.includes("UNIQUE")
                     ? "That email is already registered to another user."
                     : err.message;
-                return res.render("superAdmin/editUser", { user: { id: targetId, name, email, role }, schoolId, error: message });
+                return res.render("superAdmin/editUser", { user: { id: targetId, name, email, role }, schoolId, returnTo, roles: assignableRoles, secondaryChoices: [], secondaryRoleNames: [], error: message });
+            }
+
+            try {
+                await capabilities.setSecondaryRoles(targetId, secondaryRoleIds);
+            } catch (e) {
+                console.error("Failed to save additional roles:", e.message);
             }
 
             logChange({
@@ -433,7 +488,7 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
                 details: `Role: ${role}${password && password.trim() ? ", password reset" : ""}`
             });
 
-            res.redirect(`/super-admin/schools/${schoolId}`);
+            res.redirect(returnTo);
 
         }
     );
@@ -473,9 +528,193 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
             action: "Deleted"
         });
 
-        res.redirect(`/super-admin/schools/${schoolId}`);
+        res.redirect(usersReturnTo(schoolId, req.query.return));
 
     });
+
+});
+
+/* ===========================================
+   USER MATRIX - every person (by email) across every school, with their
+   role at each school, in one grid. Same underlying `users` table as the
+   per-school "Users at This School" list on each School Detail page above
+   (one row per school per email - see idx_users_email_school in
+   config/database.js) - just pivoted so a person who holds accounts at
+   several schools shows as ONE row instead of being scattered across
+   several School Detail pages.
+=========================================== */
+router.get("/user-matrix", async (req, res) => {
+
+    try {
+        const schools = await dbAllP("SELECT id, name FROM schools ORDER BY name", []);
+        // SuperAdmin rows are excluded - their school_id is just inert
+        // placeholder data (see scripts/create-super-admin.js), not a real
+        // per-school assignment, so they'd show as a confusing phantom
+        // "assignment" to whatever school happens to be in that column.
+        const rows = await dbAllP(
+            "SELECT id, school_id, name, email, role FROM users WHERE role != 'SuperAdmin' ORDER BY name",
+            []
+        );
+
+        // Pivot rows (one per school-account) into one entry per distinct
+        // email, keyed by school_id, so the view can just loop schools x
+        // people and look up `accounts[school.id]`.
+        const peopleByEmail = new Map();
+        rows.forEach(u => {
+            if (!peopleByEmail.has(u.email)) {
+                peopleByEmail.set(u.email, { name: u.name, email: u.email, accounts: {} });
+            }
+            peopleByEmail.get(u.email).accounts[u.school_id] = { userId: u.id, role: u.role, secondaryRoles: [] };
+        });
+
+        // Fill in each account's additional (secondary) roles too, so the
+        // matrix can show every role a person plays at that school, not
+        // just their primary one.
+        for (const person of peopleByEmail.values()) {
+            for (const schoolId of Object.keys(person.accounts)) {
+                const account = person.accounts[schoolId];
+                account.secondaryRoles = await capabilities.getSecondaryRoleNames(account.userId);
+            }
+        }
+
+        const people = Array.from(peopleByEmail.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+        res.render("superAdmin/userMatrix", { schools, people });
+
+    } catch (e) {
+        res.send(e.message);
+    }
+
+});
+
+
+/* ===========================================
+   ASSIGN A ROLE FOR A PERSON AT A SCHOOL (from the User Matrix)
+   Same underlying INSERT as "Add User to This School" on School Detail
+   (further up) - just reachable with the school chosen from a dropdown
+   instead of fixed by the URL, and able to pre-fill an existing person's
+   name/email when the matrix's own "+ Assign" link is used to give them a
+   role at an ADDITIONAL school, rather than only for creating someone new.
+=========================================== */
+router.get("/user-matrix/assign", async (req, res) => {
+
+    try {
+        const schools = await dbAllP("SELECT id, name FROM schools ORDER BY name", []);
+        const roles = await capabilities.getAssignableRoleNames();
+        res.render("superAdmin/assignUser", {
+            schools,
+            roles,
+            prefill: {
+                name: req.query.name || "",
+                email: req.query.email || "",
+                school_id: req.query.school_id || ""
+            },
+            error: null
+        });
+    } catch (e) {
+        res.send(e.message);
+    }
+
+});
+
+router.post("/user-matrix/assign", async (req, res) => {
+
+    const { name, email, password, school_id } = req.body;
+
+    try {
+        const schools = await dbAllP("SELECT id, name FROM schools ORDER BY name", []);
+        const assignableRoles = await capabilities.getAssignableRoleNames();
+        const role = assignableRoles.includes(req.body.role) ? req.body.role : "Teacher";
+
+        if (!school_id) {
+            return res.render("superAdmin/assignUser", { schools, roles: assignableRoles, prefill: req.body, error: "Please choose a school." });
+        }
+
+        const passwordHash = bcrypt.hashSync(password || "", 10);
+
+        db.run(
+            `INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?,?)`,
+            [school_id, name, email, passwordHash, role],
+            (err) => {
+
+                if (err) {
+                    const message = err.message.includes("UNIQUE")
+                        ? "This person already has an account at that school - edit their role from the matrix instead."
+                        : err.message;
+                    return res.render("superAdmin/assignUser", { schools, roles: assignableRoles, prefill: req.body, error: message });
+                }
+
+                logChange({
+                    schoolId: school_id, branchId: null, req,
+                    entityType: "User", entityName: `${name} (${email})`, action: "Created",
+                    details: `Role: ${role} (via User Matrix)`
+                });
+
+                res.redirect("/super-admin/user-matrix");
+
+            }
+        );
+    } catch (e) {
+        res.send(e.message);
+    }
+
+});
+
+/* ===========================================
+   ROLES & CAPABILITIES - which feature modules (Students, Attendance, Fees,
+   WhatsApp, ...) each role can open at all. Separate from the per-user
+   Primary/Additional Role assignment above (School Detail / User Matrix /
+   Edit User) - this page controls what each ROLE itself is allowed to see,
+   and also where new custom roles get created (Deepak's "can we add new
+   Roles too?").
+=========================================== */
+router.get("/roles", async (req, res) => {
+
+    try {
+        const roles = await capabilities.getAllRolesWithCapabilities();
+        res.render("superAdmin/roles", {
+            roles,
+            capabilityList: capabilities.CAPABILITIES,
+            error: req.query.error || null,
+            saved: req.query.saved || null
+        });
+    } catch (e) {
+        res.send(e.message);
+    }
+
+});
+
+router.post("/roles/new", async (req, res) => {
+
+    try {
+        await capabilities.createRole(req.body.name);
+        res.redirect("/super-admin/roles");
+    } catch (e) {
+        res.redirect("/super-admin/roles?error=" + encodeURIComponent(e.message));
+    }
+
+});
+
+router.post("/roles/:id/capabilities", async (req, res) => {
+
+    try {
+        const keys = [].concat(req.body.capabilities || []);
+        await capabilities.setRoleCapabilities(req.params.id, keys);
+        res.redirect("/super-admin/roles?saved=1");
+    } catch (e) {
+        res.redirect("/super-admin/roles?error=" + encodeURIComponent(e.message));
+    }
+
+});
+
+router.post("/roles/:id/delete", async (req, res) => {
+
+    try {
+        await capabilities.deleteRole(req.params.id);
+        res.redirect("/super-admin/roles");
+    } catch (e) {
+        res.redirect("/super-admin/roles?error=" + encodeURIComponent(e.message));
+    }
 
 });
 

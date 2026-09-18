@@ -6,8 +6,11 @@ const db = require("../config/database");
  *
  * This is a SEPARATE mechanism from:
  *  - services/enrollmentFee.js's "Total Fee" (Course Fee) - the single
- *    lump-sum + free-form installments-as-payments section on the Student
- *    form. Left untouched; a school can keep using either or both.
+ *    lump-sum + free-form installments-as-payments section that used to live
+ *    on the Student Add/Edit forms. That UI was removed once schools moved
+ *    onto per-component Tuition/Books fees below - the service function
+ *    still exists (and old "Course Fee" records it created still show up
+ *    wherever fee items are listed) but is no longer called from anywhere.
  *  - services/feePlanGenerator.js's per-Level Fee Plans - shared rates
  *    applied to every student in a Level. Left untouched.
  *

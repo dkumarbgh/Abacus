@@ -52,7 +52,7 @@
     </div>
     <div class="col-md-2 text-end">
         <a href="/students/add" class="btn btn-success">➕ Register Student</a>
-        <% if (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin')) { %>
+        <% if (currentUser && currentUser.roles && (currentUser.roles.includes('Admin') || currentUser.roles.includes('SuperAdmin'))) { %>
             <a href="/students/import" class="btn btn-outline-secondary">⬆ Import</a>
             <a href="/students/export" class="btn btn-outline-secondary">⬇ Export</a>
         <% } %>

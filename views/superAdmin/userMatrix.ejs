@@ -1,0 +1,63 @@
+<%- include("../partials/header") %>
+<%- include("../partials/superAdminNav") %>
+
+<a href="/super-admin" class="btn btn-outline-secondary btn-sm mb-3">&larr; All Schools</a>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="mb-0">User Matrix</h2>
+        <p class="text-muted mb-0">Every person's role at every school, in one place. To add someone new or give an existing person a role at another school, use "+ Add User" below.</p>
+    </div>
+    <a href="/super-admin/user-matrix/assign" class="btn btn-success">+ Add User</a>
+</div>
+
+<% if (schools.length === 0) { %>
+    <div class="alert alert-info">No schools yet - <a href="/super-admin/schools/new">create one</a> first.</div>
+<% } else if (people.length === 0) { %>
+    <div class="alert alert-info">No users yet at any school. Use "+ Add User" to create the first one.</div>
+<% } else { %>
+    <div class="card shadow">
+        <div class="card-body table-responsive">
+            <table class="table table-bordered table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="min-width: 200px;">Person</th>
+                        <% schools.forEach(function(school) { %>
+                            <th style="min-width: 160px;"><%= school.name %></th>
+                        <% }) %>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% people.forEach(function(person) { %>
+                        <tr>
+                            <td>
+                                <div><%= person.name %></div>
+                                <div class="text-muted small"><%= person.email %></div>
+                            </td>
+                            <% schools.forEach(function(school) { %>
+                                <td class="text-center">
+                                    <% const account = person.accounts[school.id]; %>
+                                    <% if (account) { %>
+                                        <% const badgeClass = account.role === 'Admin' ? 'bg-primary' : (account.role === 'Accountant' ? 'bg-info text-dark' : 'bg-secondary'); %>
+                                        <div class="mb-1">
+                                            <span class="badge <%= badgeClass %>"><%= account.role %></span>
+                                            <% (account.secondaryRoles || []).forEach(function(sr) { %>
+                                                <span class="badge bg-light text-dark border">+ <%= sr %></span>
+                                            <% }) %>
+                                        </div>
+                                        <a href="/super-admin/schools/<%= school.id %>/users/edit/<%= account.userId %>?return=matrix" class="btn btn-outline-primary btn-sm">Edit</a>
+                                        <a href="/super-admin/schools/<%= school.id %>/users/delete/<%= account.userId %>?return=matrix" class="btn btn-outline-danger btn-sm" onclick="return confirm('Remove this user from this school?')">Remove</a>
+                                    <% } else { %>
+                                        <a href="/super-admin/user-matrix/assign?name=<%= encodeURIComponent(person.name) %>&email=<%= encodeURIComponent(person.email) %>&school_id=<%= school.id %>" class="btn btn-outline-secondary btn-sm">+ Assign</a>
+                                    <% } %>
+                                </td>
+                            <% }) %>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<% } %>
+
+<%- include("../partials/footer") %>

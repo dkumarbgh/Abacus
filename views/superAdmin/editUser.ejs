@@ -1,7 +1,7 @@
 <%- include("../partials/header") %>
 <%- include("../partials/superAdminNav") %>
 
-<a href="/super-admin/schools/<%= schoolId %>" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to School</a>
+<a href="<%= typeof returnTo !== 'undefined' ? returnTo : '/super-admin/schools/' + schoolId %>" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back</a>
 
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -16,6 +16,9 @@
                 <% } %>
 
                 <form action="/super-admin/schools/<%= schoolId %>/users/edit/<%= user.id %>" method="POST">
+                    <% if (typeof returnTo !== 'undefined' && returnTo === '/super-admin/user-matrix') { %>
+                        <input type="hidden" name="return_to" value="matrix">
+                    <% } %>
                     <div class="mb-3">
                         <label class="form-label">Name</label>
                         <input type="text" name="name" class="form-control" value="<%= user.name %>" required>
@@ -25,16 +28,31 @@
                         <input type="email" name="email" class="form-control" value="<%= user.email %>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Role</label>
+                        <label class="form-label">Primary Role</label>
                         <select name="role" class="form-select">
-                            <option value="Teacher" <%= user.role==='Teacher' ? 'selected' : '' %>>Teacher</option>
-                            <option value="Accountant" <%= user.role==='Accountant' ? 'selected' : '' %>>Accountant</option>
-                            <option value="Admin" <%= user.role==='Admin' ? 'selected' : '' %>>Admin</option>
+                            <% roles.forEach(function(r) { %>
+                                <option value="<%= r %>" <%= user.role===r ? 'selected' : '' %>><%= r %></option>
+                            <% }) %>
                         </select>
                     </div>
+                    <% if (secondaryChoices && secondaryChoices.length > 0) { %>
+                    <div class="mb-3">
+                        <label class="form-label">Additional Roles</label>
+                        <div class="border rounded p-2">
+                            <% secondaryChoices.forEach(function(choice) { %>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="secondary_roles" value="<%= choice.id %>" id="secRole<%= choice.id %>"
+                                        <%= secondaryRoleNames.includes(choice.name) ? 'checked' : '' %>>
+                                    <label class="form-check-label" for="secRole<%= choice.id %>"><%= choice.name %></label>
+                                </div>
+                            <% }) %>
+                        </div>
+                        <small class="text-muted">Lets this user also act under these roles' capabilities, in addition to their primary role above.</small>
+                    </div>
+                    <% } %>
                     <%- include("../partials/passwordField", { id: "saEditPassword", name: "password", label: "New Password", minlength: 6, placeholder: "Leave blank to keep their current password" }) %>
                     <button class="btn btn-primary">Save Changes</button>
-                    <a href="/super-admin/schools/<%= schoolId %>" class="btn btn-secondary">Cancel</a>
+                    <a href="<%= typeof returnTo !== 'undefined' ? returnTo : '/super-admin/schools/' + schoolId %>" class="btn btn-secondary">Cancel</a>
                 </form>
 
             </div>

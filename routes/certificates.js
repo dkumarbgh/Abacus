@@ -6,9 +6,11 @@ const path = require("path");
 const fs = require("fs");
 const sizeOf = require("image-size");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { renderCertificates } = require("../services/certificateGenerator");
 
 router.use(requireLogin);
+router.use(requireCapability("certificates"));
 
 const upload = multer({
     storage: multer.diskStorage({

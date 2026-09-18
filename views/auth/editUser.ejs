@@ -25,9 +25,9 @@
                     <div class="mb-3">
                         <label class="form-label">Role</label>
                         <select name="role" class="form-select">
-                            <option value="Teacher" <%= user.role==='Teacher' ? 'selected' : '' %>>Teacher</option>
-                            <option value="Accountant" <%= user.role==='Accountant' ? 'selected' : '' %>>Accountant</option>
-                            <option value="Admin" <%= user.role==='Admin' ? 'selected' : '' %>>Admin</option>
+                            <% roles.forEach(function(r) { %>
+                                <option value="<%= r %>" <%= user.role===r ? 'selected' : '' %>><%= r %></option>
+                            <% }) %>
                         </select>
                     </div>
                     <%- include("../partials/passwordField", { id: "editUserPassword", name: "password", label: "New Password", minlength: 6, placeholder: "Leave blank to keep their current password" }) %>

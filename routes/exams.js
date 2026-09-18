@@ -2,10 +2,12 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { computeNetAmount } = require("../services/feeCalc");
 const { logChange } = require("../services/auditLog");
 
 router.use(requireLogin);
+router.use(requireCapability("exams"));
 
 /* ===========================================
    EXAM LIST + CREATE FORM

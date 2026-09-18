@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 
 router.use(requireLogin);
+router.use(requireCapability("lists"));
 
 const LIST_TYPES = {
     course: "Courses",

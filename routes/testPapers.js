@@ -5,10 +5,12 @@ const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 const { renderTestPaper } = require("../services/abacusTestGenerator");
 const { distributeDocument } = require("../services/distribution");
 
 router.use(requireLogin);
+router.use(requireCapability("test_papers"));
 
 /* ==========================================
    CONFIGURATION PAGE - Paper Settings (incl. an editable Date) + the

@@ -2,10 +2,13 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/database");
 const { sendToPhones, sendBulk, isReady, getDiagnostics, getRecentLogs, getLastQrImage } = require("../services/whatsappClient");
-const { requireLogin, requireRole, requireFeature } = require("../middleware/auth");
+const { requireLogin, requireRole, requireFeature, requireSchoolFeature } = require("../middleware/auth");
+const { requireCapability } = require("../services/capabilities");
 
 router.use(requireLogin);
+router.use(requireCapability("whatsapp"));
 router.use(requireFeature("whatsapp"));
+router.use(requireSchoolFeature("whatsapp_enabled", "WhatsApp"));
 
 /* ===========================================
    MESSAGE CENTER - pick a student / class, compose, send
@@ -103,6 +106,25 @@ router.post("/broadcast", (req, res) => {
 
     });
 
+});
+
+/* ===========================================
+   LIVE STATUS (polled by the QR card on both / and /debug)
+   A WhatsApp Web QR code rotates roughly every 20-30 seconds - by the time
+   someone loads the page, walks over to their phone, opens WhatsApp, and
+   gets to the "Link a Device" scanner, a STATIC QR image is very likely
+   already stale, which is exactly what "could not link the device" usually
+   turns out to be (the scan itself isn't failing, it's scanning a code
+   that's no longer valid). Polling this and swapping the <img> in place
+   keeps whatever's on screen scannable without the visitor needing to
+   know to hit Refresh at the right moment.
+=========================================== */
+router.get("/status", (req, res) => {
+    res.json({
+        ready: isReady(),
+        qrImage: getLastQrImage(),
+        lastQrAt: getDiagnostics().lastQrAt
+    });
 });
 
 /* ===========================================

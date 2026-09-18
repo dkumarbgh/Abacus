@@ -101,7 +101,7 @@
                         <% } %>
                     </td>
                     <td><%= r.expected == null ? '-' : r.expected %></td>
-                    <td><%= r.expected == null ? '-' : r.homeAttended %></td>
+                    <td><%= r.homeAttended %></td>
                     <td>
                         <% if (r.differentAttended > 0) { %>
                             <span class="badge bg-warning text-dark"><%= r.differentAttended %></span>
@@ -109,7 +109,7 @@
                             0
                         <% } %>
                     </td>
-                    <td><b><%= r.expected == null ? '-' : r.totalAttended %></b></td>
+                    <td><b><%= r.totalAttended %></b></td>
                     <td><%= r.pct == null ? '-' : r.pct + '%' %></td>
                     <td>
                         <% if (r.status === 'Regular') { %>
@@ -117,7 +117,7 @@
                         <% } else if (r.status === 'Irregular') { %>
                             <span class="badge bg-danger">Irregular</span>
                         <% } else { %>
-                            <span class="badge bg-secondary">No batch / not set</span>
+                            <span class="badge bg-secondary" title="Attendance is recorded (see Total Attended) but there's no sessions/week or weekly schedule set for this student's batch, so an Expected count and % can't be calculated.">No schedule set</span>
                         <% } %>
                     </td>
                     <td>

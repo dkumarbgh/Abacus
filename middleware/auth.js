@@ -18,6 +18,7 @@ async function requireLogin(req, res, next) {
 
     req.schoolId = req.session.schoolId;
     req.userRole = req.session.role;
+    req.userId = req.session.userId;
 
     try {
         res.locals.t = await buildTranslator(req.schoolId);
@@ -28,16 +29,43 @@ async function requireLogin(req, res, next) {
         res.locals.t = (key) => (DEFAULTS.en[key] !== undefined ? DEFAULTS.en[key] : key);
     }
 
+    // Per-school WhatsApp toggle (schools.whatsapp_enabled), exposed to every
+    // view so the navbar can hide the WhatsApp link once a school turns it
+    // off - not just block the route itself (see requireSchoolFeature below).
+    res.locals.schoolWhatsappEnabled = await new Promise((resolve) => {
+        const db = require("../config/database");
+        db.get("SELECT whatsapp_enabled FROM schools WHERE id=?", [req.schoolId], (err, row) => {
+            resolve(err || !row ? true : !!row.whatsapp_enabled);
+        });
+    });
+
     next();
 
 }
 
+// Checks the user's EFFECTIVE role set - their primary role (users.role,
+// unchanged - still what drives login/the "last Admin" safety guards/etc)
+// PLUS any secondary roles granted via Super Admin > Roles & Capabilities
+// (see services/capabilities.js) - so someone holding Teacher as their
+// primary role and Accountant as a secondary one passes
+// requireRole("Accountant") without their primary role ever changing.
+// Every existing requireRole(...) call site needed zero changes for this -
+// a user with only ever had a primary role behaves exactly as before.
 function requireRole(...roles) {
-    return (req, res, next) => {
-        if (!req.userRole || !roles.includes(req.userRole)) {
-            return res.status(403).send("<h3>You don't have permission to do that.</h3><a href='/'>Back to Dashboard</a>");
+    return async (req, res, next) => {
+        try {
+            if (!req.userRole) {
+                return res.status(403).send("<h3>You don't have permission to do that.</h3><a href='/'>Back to Dashboard</a>");
+            }
+            const { getEffectiveRoleNames } = require("../services/capabilities");
+            const effective = await getEffectiveRoleNames(req.userRole, req.userId);
+            if (!effective.some(r => roles.includes(r))) {
+                return res.status(403).send("<h3>You don't have permission to do that.</h3><a href='/'>Back to Dashboard</a>");
+            }
+            next();
+        } catch (e) {
+            res.status(403).send("<h3>You don't have permission to do that.</h3><a href='/'>Back to Dashboard</a>");
         }
-        next();
     };
 }
 
@@ -100,7 +128,7 @@ function requireSchoolFeature(columnName, friendlyName) {
             if (err) return res.send(err.message);
             if (!row || !row.enabled) {
                 return res.status(403).send(
-                    `<h3>${friendlyName} Import/Export isn't turned on for your school.</h3>` +
+                    `<h3>${friendlyName} isn't turned on for your school.</h3>` +
                     `<p>An Admin can enable it from Settings.</p>` +
                     `<a href="/settings">Go to Settings</a>`
                 );

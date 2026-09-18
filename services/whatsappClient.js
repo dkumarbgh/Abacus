@@ -150,7 +150,18 @@ const client = new Client({
             // gets killed by the real (invisible-to-Node) limit. A full
             // multi-process Chrome easily uses several hundred MB; these
             // flags are the standard mitigation on RAM-constrained hosts.
-            "--single-process",       // biggest win: one process instead of Chrome's normal multi-process model
+            //
+            // NOTE: --single-process and --no-zygote used to be here too,
+            // but recent Chrome/Chrome-for-Testing builds (seen: 146.x)
+            // crash immediately on launch with them - the browser process
+            // closes before Puppeteer finishes attaching, surfacing as
+            // "TargetCloseError: Protocol error (Target.setDiscoverTargets):
+            // Target closed" right after "Client failed to start", with NO
+            // QR code ever generated. That's a Chrome-version incompatibility,
+            // not a config/session/QR-timing problem - removed rather than
+            // worked around, since they were the least safe of these flags
+            // anyway (a browser update on Render could reintroduce the same
+            // crash there too).
             "--disable-gpu",
             "--disable-extensions",
             "--disable-background-networking",
@@ -159,7 +170,6 @@ const client = new Client({
             "--disable-translate",
             "--mute-audio",
             "--no-first-run",
-            "--no-zygote",
             "--metrics-recording-only"
         ]
     }
@@ -299,12 +309,38 @@ async function sendToPhones(phones, opts) {
         return "NO_PHONE";
     }
 
+    // Single chokepoint for the per-school WhatsApp toggle (schools.whatsapp_enabled -
+    // see routes/settings.js). Checked here rather than only at the /whatsapp
+    // route level so automatic sends that don't go through that router - payment
+    // confirmations (routes/feePayments.js), bulk fee reminders (routes/reports.js),
+    // and Practice Sheet/Test Paper distribution (services/distribution.js) - are
+    // also blocked once a school turns WhatsApp off, not just the Message Center UI.
+    if (opts.schoolId && !(await isWhatsappEnabledForSchool(opts.schoolId))) {
+        log("info", "Send skipped - WhatsApp is turned off for school_id", opts.schoolId);
+        return "SCHOOL_DISABLED";
+    }
+
     const statuses = [];
     for (const phone of unique) {
         statuses.push(await sendMessage({ ...opts, phone }));
     }
 
     return statuses.includes("SENT") ? "SENT" : "FAILED";
+}
+
+/** Reads the per-school WhatsApp toggle (schools.whatsapp_enabled). Fails
+ *  open (treats as enabled) on a DB error, so a transient hiccup here never
+ *  silently blocks a real send. */
+function isWhatsappEnabledForSchool(schoolId) {
+    return new Promise((resolve) => {
+        db.get("SELECT whatsapp_enabled FROM schools WHERE id=?", [schoolId], (err, row) => {
+            if (err) {
+                log("error", "Failed to check per-school WhatsApp toggle:", err);
+                return resolve(true);
+            }
+            resolve(!row || !!row.whatsapp_enabled);
+        });
+    });
 }
 
 /**

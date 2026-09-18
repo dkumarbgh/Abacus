@@ -1,0 +1,60 @@
+<%- include("../partials/header") %>
+<%- include("../partials/superAdminNav") %>
+
+<a href="/super-admin/user-matrix" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to User Matrix</a>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Assign a Role at a School</h4>
+            </div>
+            <div class="card-body">
+
+                <% if (error) { %>
+                    <div class="alert alert-danger"><%= error %></div>
+                <% } %>
+
+                <p class="text-muted small">
+                    Creates a new account for this email at the school chosen below (each school
+                    needs its own account and password - see the User Matrix for who already has
+                    one where). To give someone you're already assigning a role at a second school
+                    later, come back here from their row in the matrix.
+                </p>
+
+                <form action="/super-admin/user-matrix/assign" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" value="<%= prefill.name %>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control" value="<%= prefill.email %>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">School</label>
+                        <select name="school_id" class="form-select" required>
+                            <option value="">Select a school</option>
+                            <% schools.forEach(function(s) { %>
+                                <option value="<%= s.id %>" <%= String(prefill.school_id)===String(s.id) ? "selected" : "" %>><%= s.name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select name="role" class="form-select">
+                            <% roles.forEach(function(r) { %>
+                                <option value="<%= r %>" <%= r === 'Teacher' ? 'selected' : '' %>><%= r %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <%- include("../partials/passwordField", { id: "matrixAssignPassword", name: "password", label: "Password", required: true, minlength: 6 }) %>
+                    <button class="btn btn-success w-100">Assign</button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("../partials/footer") %>

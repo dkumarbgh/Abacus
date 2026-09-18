@@ -20,6 +20,13 @@ function getSimpleFeeMode(schoolId) {
  * in code, not something Settings can change).
  *
  * Shape: { [formKey]: { [fieldKey]: { label, defaultMandatory } } }
+ *
+ * Note: "fee_due_date" and "fee_plan_id" were intentionally removed from
+ * the student form/settings (Deepak's request - they cluttered Add/Edit
+ * Student) - the columns and the code that reads them (Attendance After
+ * Due Date report, Fee Plan auto-generation) are untouched, so existing
+ * data keeps working; they're just no longer set from this form. Fee
+ * Plans are still assignable via Fee Structure > Auto (From Join Date).
  */
 const FIELD_DEFS = {
     student: {
@@ -32,7 +39,6 @@ const FIELD_DEFS = {
         guardian_phone_2: { label: "WhatsApp 2 Number", defaultMandatory: false },
         guardian_email: { label: "Guardian Email",           defaultMandatory: false },
         address:        { label: "Address",                  defaultMandatory: false },
-        fee_due_date:   { label: "Fee Due Date",             defaultMandatory: false },
 
         mother_tongue:      { label: "Mother Tongue",              defaultMandatory: false },
         mother_name:        { label: "Mother's Name",               defaultMandatory: false },

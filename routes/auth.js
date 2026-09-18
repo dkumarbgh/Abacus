@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
+const { getAssignableRoleNames } = require("../services/capabilities");
 
 /* ===========================================
    LOGIN / LOGOUT
@@ -170,30 +171,36 @@ router.get("/logout", (req, res) => {
    USER MANAGEMENT (Admin only) - add teachers/accountants
    to the SAME school as the logged-in admin
 =========================================== */
-router.get("/users", requireLogin, requireRole("Admin"), (req, res) => {
+router.get("/users", requireLogin, requireRole("Admin"), async (req, res) => {
 
-    db.all(
-        "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
-        [req.schoolId],
-        (err, users) => {
+    try {
+        const roles = await getAssignableRoleNames();
+        db.all(
+            "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
+            [req.schoolId],
+            (err, users) => {
 
-            if (err) return res.send(err.message);
+                if (err) return res.send(err.message);
 
-            res.render("auth/users", { users, error: null });
+                res.render("auth/users", { users, roles, error: null });
 
-        }
-    );
+            }
+        );
+    } catch (e) {
+        res.send(e.message);
+    }
 
 });
 
-router.post("/users/add", requireLogin, requireRole("Admin"), (req, res) => {
+router.post("/users/add", requireLogin, requireRole("Admin"), async (req, res) => {
 
     const { name, email, password, role } = req.body;
     const passwordHash = bcrypt.hashSync(password, 10);
+    const roles = await getAssignableRoleNames();
 
     db.run(
         `INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?,?)`,
-        [req.schoolId, name, email, passwordHash, role || "Teacher"],
+        [req.schoolId, name, email, passwordHash, roles.includes(role) ? role : "Teacher"],
         (err) => {
 
             if (err) {
@@ -204,7 +211,7 @@ router.post("/users/add", requireLogin, requireRole("Admin"), (req, res) => {
                 return db.all(
                     "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
                     [req.schoolId],
-                    (err2, users) => res.render("auth/users", { users: users || [], error: message })
+                    (err2, users) => res.render("auth/users", { users: users || [], roles, error: message })
                 );
             }
 
@@ -239,28 +246,35 @@ router.get("/users/delete/:id", requireLogin, requireRole("Admin"), (req, res) =
    Scoped to the Admin's own school - they can only edit users that belong
    to the same school as them, same as every other user-management route.
 =========================================== */
-router.get("/users/edit/:id", requireLogin, requireRole("Admin"), (req, res) => {
+router.get("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, res) => {
 
-    db.get(
-        "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
-        [req.params.id, req.schoolId],
-        (err, user) => {
+    try {
+        const roles = await getAssignableRoleNames();
+        db.get(
+            "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
+            [req.params.id, req.schoolId],
+            (err, user) => {
 
-            if (err) return res.send(err.message);
-            if (!user) return res.send("User not found");
+                if (err) return res.send(err.message);
+                if (!user) return res.send("User not found");
 
-            res.render("auth/editUser", { user, error: null });
+                res.render("auth/editUser", { user, roles, error: null });
 
-        }
-    );
+            }
+        );
+    } catch (e) {
+        res.send(e.message);
+    }
 
 });
 
 router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, res) => {
 
-    const { name, email, role, password } = req.body;
+    const { name, email, password } = req.body;
     const schoolId = req.schoolId;
     const targetId = req.params.id;
+    const assignableRoles = await getAssignableRoleNames();
+    const role = assignableRoles.includes(req.body.role) ? req.body.role : "Teacher";
 
     // Guard against locking the school out entirely: if this edit would
     // remove the last remaining Admin (by downgrading their role), block it.
@@ -282,6 +296,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
                 (err, user) => {
                     res.render("auth/editUser", {
                         user: user || { id: targetId, name, email, role },
+                        roles: assignableRoles,
                         error: "Can't change this user's role - they're the only Admin left for this school. Make someone else Admin first."
                     });
                 }
@@ -314,7 +329,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
                     "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
                     [targetId, schoolId],
                     (err2, user) => {
-                        res.render("auth/editUser", { user: user || { id: targetId, name, email, role }, error: message });
+                        res.render("auth/editUser", { user: user || { id: targetId, name, email, role }, roles: assignableRoles, error: message });
                     }
                 );
             }
