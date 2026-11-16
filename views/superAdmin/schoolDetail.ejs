@@ -34,8 +34,8 @@
                         <input type="text" name="name" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" required>
+                        <label class="form-label">Email / Username</label>
+                        <input type="text" name="email" class="form-control" required autocapitalize="none">
                     </div>
                     <%- include("../partials/passwordField", { id: "saAddPassword", name: "password", label: "Password", required: true, minlength: 6 }) %>
                     <div class="mb-3">
@@ -45,6 +45,10 @@
                                 <option value="<%= r %>" <%= r === 'Teacher' ? 'selected' : '' %>><%= r %></option>
                             <% }) %>
                         </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="read_only" value="1" id="saAddReadOnly">
+                        <label class="form-check-label" for="saAddReadOnly">👀 View-only (demo login - can see, can't change anything)</label>
                     </div>
                     <button class="btn btn-success w-100">Add User</button>
                 </form>
@@ -68,7 +72,7 @@
                             <tr>
                                 <td><%= u.name %></td>
                                 <td><%= u.email %></td>
-                                <td><span class="badge bg-secondary"><%= u.role %></span></td>
+                                <td><span class="badge bg-secondary"><%= u.role %></span><% if (u.read_only) { %> <span class="badge bg-info text-dark">👀 View-only</span><% } %></td>
                                 <td>
                                     <a href="/super-admin/schools/<%= school.id %>/users/edit/<%= u.id %>" class="btn btn-primary btn-sm">Edit</a>
                                     <a href="/super-admin/schools/<%= school.id %>/users/delete/<%= u.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Remove this user?')">Remove</a>

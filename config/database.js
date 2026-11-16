@@ -1086,6 +1086,13 @@ async function migrate() {
         await run(`ALTER TABLE users_new RENAME TO users`);
         console.log("[migration] Rebuilt users table - one email can now have an account per school.");
     }
+
+    // View-only (demo) logins - see middleware/readOnly.js. 0 for every
+    // existing user, so nothing changes until a SuperAdmin ticks the box.
+    // Must stay AFTER the users-table rebuild just above: on a brand new
+    // database that rebuild runs on first boot and only copies the columns
+    // it knows about, so adding read_only any earlier gets it dropped.
+    await addColumnIfMissing("users", "read_only", "INTEGER NOT NULL DEFAULT 0");
     await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_school ON users(email, school_id)`);
 
     // subjects.subject_code was originally UNIQUE globally, which breaks as

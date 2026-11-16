@@ -18,4 +18,7 @@ logs/
 playwright-report/
 test-results/
 face-service/
-public/
+# Only user uploads stay out of Git - the rest of public/ (CSS, JS,
+# images) is part of the app and must be committed.
+public/uploads/
+backups/

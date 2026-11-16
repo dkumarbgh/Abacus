@@ -45,6 +45,7 @@ router.post("/login", (req, res) => {
         req.session.role = user.role;
         req.session.name = user.name;
         req.session.schoolName = user.school_name;
+        req.session.readOnly = !!user.read_only;
 
         if (user.role === "SuperAdmin") {
             return res.redirect("/super-admin");
@@ -87,7 +88,8 @@ router.post("/login", (req, res) => {
             // the choice below) go into the session - never password
             // hashes, and the account isn't actually logged into yet.
             req.session.pendingAccounts = matches.map(u => ({
-                id: u.id, name: u.name, role: u.role, school_id: u.school_id, school_name: u.school_name
+                id: u.id, name: u.name, role: u.role, school_id: u.school_id, school_name: u.school_name,
+                read_only: !!u.read_only
             }));
             res.redirect("/login/choose-account");
 
@@ -124,6 +126,7 @@ router.post("/login/choose-account", (req, res) => {
     req.session.role = chosen.role;
     req.session.name = chosen.name;
     req.session.schoolName = chosen.school_name;
+    req.session.readOnly = !!chosen.read_only;
 
     if (chosen.role === "SuperAdmin") {
         return res.redirect("/super-admin");
@@ -281,7 +284,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
     if (role !== "Admin") {
         const adminCount = await new Promise((resolve, reject) => {
             db.get(
-                "SELECT COUNT(*) AS n FROM users WHERE school_id=? AND role='Admin' AND id != ?",
+                "SELECT COUNT(*) AS n FROM users WHERE school_id=? AND role='Admin' AND COALESCE(read_only,0)=0 AND id != ?",
                 [schoolId, targetId],
                 (err, row) => err ? reject(err) : resolve(row.n)
             );

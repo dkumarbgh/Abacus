@@ -9,6 +9,11 @@ const path = require("path");
 const session = require("express-session");
 
 const db = require("./config/database");
+const { enforceReadOnly, installDbGuard } = require("./middleware/readOnly");
+
+// View-only (demo) logins: see middleware/readOnly.js. Installed once at
+// startup; a no-op for every normal user.
+installDbGuard(db);
 const { requireLogin } = require("./middleware/auth");
 const { ensureRolesSeeded } = require("./services/capabilities");
 const fs = require("fs");
@@ -76,12 +81,21 @@ app.use(bodyParser.json());
 // this scale (a single small school's staff); it just means everyone is
 // logged out if the server restarts. Swap in a persistent store (e.g.
 // connect-sqlite3 or connect-redis) later if that becomes annoying.
+// Behind Nginx/Hostinger's HTTPS proxy: trust the first proxy so
+// req.secure / req.ip / X-Forwarded-Proto are read correctly. Harmless
+// when running directly on a laptop.
+app.set("trust proxy", 1);
+
 app.use(session({
     secret: process.env.SESSION_SECRET || "change-this-secret-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 days
 }));
+
+// Must come right after the session middleware (it reads
+// req.session.readOnly) and before every route.
+app.use(enforceReadOnly);
 
 // Make the logged-in user available to every EJS view as `currentUser`
 // (used by the navbar to show school name / user / admin-only links).
@@ -239,7 +253,7 @@ app.use((req, res) => {
 });
 
 // Start Server
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

@@ -5,12 +5,18 @@
 </div>
 <% } %>
 
+<% if (typeof readOnly !== 'undefined' && readOnly) { %>
+<div class="alert alert-info rounded-0 mb-0 py-2 text-center">
+    👀 <strong>View-only demo</strong> - feel free to look around. Nothing can be added, changed or deleted with this login.
+</div>
+<% } %>
+
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
 
     <div class="container-fluid px-3">
 
         <a class="navbar-brand fw-bold" href="/">
-            🏫 Abacas Kuvempunagar
+            🏫 IQPlusAcademy
         </a>
 
         <button
@@ -88,7 +94,7 @@
                     </ul>
                 </li>
 
-                <% if (features.whatsapp && typeof schoolWhatsappEnabled !== 'undefined' && schoolWhatsappEnabled) { %>
+                <% if (features.whatsapp && typeof schoolWhatsappEnabled !== 'undefined' && schoolWhatsappEnabled && !(typeof readOnly !== 'undefined' && readOnly)) { %>
                 <li class="nav-item">
                     <a class="nav-link" href="/whatsapp">
                         💬 WhatsApp
@@ -107,11 +113,13 @@
             <ul class="navbar-nav">
 
                 <% if (typeof currentUser !== 'undefined' && currentUser && currentUser.roles && currentUser.roles.includes('Admin')) { %>
+                <% if (!(typeof readOnly !== 'undefined' && readOnly)) { %>
                 <li class="nav-item">
                     <a class="nav-link" href="/users">
                         👤 Users
                     </a>
                 </li>
+                <% } %>
                 <li class="nav-item">
                     <a class="nav-link" href="/settings">
                         ⚙️ Settings

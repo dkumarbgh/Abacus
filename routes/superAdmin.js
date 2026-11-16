@@ -136,7 +136,7 @@ router.get("/schools/:id", async (req, res) => {
             if (!school) return res.send("School not found");
 
             db.all(
-                "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
+                "SELECT id, name, email, role, read_only, created_at FROM users WHERE school_id=? ORDER BY name",
                 [req.params.id],
                 (err2, users) => {
 
@@ -347,10 +347,11 @@ router.post("/schools/:id/users/add", async (req, res) => {
     const schoolId = req.params.id;
     const roles = await capabilities.getAssignableRoleNames();
     const role = roles.includes(req.body.role) ? req.body.role : "Teacher";
+    const readOnly = !!req.body.read_only;
 
     db.run(
-        `INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?,?)`,
-        [schoolId, name, email, passwordHash, role],
+        `INSERT INTO users (school_id, name, email, password_hash, role, read_only) VALUES (?,?,?,?,?,?)`,
+        [schoolId, name, email, passwordHash, role, readOnly ? 1 : 0],
         (err) => {
 
             if (err) {
@@ -359,7 +360,7 @@ router.post("/schools/:id/users/add", async (req, res) => {
                     : err.message;
 
                 return db.get("SELECT * FROM schools WHERE id=?", [schoolId], (err2, school) => {
-                    db.all("SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name", [schoolId], (err3, users) => {
+                    db.all("SELECT id, name, email, role, read_only, created_at FROM users WHERE school_id=? ORDER BY name", [schoolId], (err3, users) => {
                         res.render("superAdmin/schoolDetail", { school, users: users || [], roles, error: message });
                     });
                 });
@@ -368,7 +369,7 @@ router.post("/schools/:id/users/add", async (req, res) => {
             logChange({
                 schoolId, branchId: null, req,
                 entityType: "User", entityName: `${name} (${email})`, action: "Created",
-                details: `Role: ${role}`
+                details: `Role: ${role}${readOnly ? ", view-only (demo)" : ""}`
             });
 
             res.redirect(`/super-admin/schools/${schoolId}`);
@@ -389,7 +390,7 @@ router.get("/schools/:id/users/edit/:userId", async (req, res) => {
         const allRoles = await capabilities.getAllRolesWithCapabilities();
 
         db.get(
-            "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
+            "SELECT id, name, email, role, read_only FROM users WHERE id=? AND school_id=?",
             [req.params.userId, req.params.id],
             async (err, user) => {
 
@@ -437,7 +438,7 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
     if (role !== "Admin") {
         const adminCount = await new Promise((resolve, reject) => {
             db.get(
-                "SELECT COUNT(*) AS n FROM users WHERE school_id=? AND role='Admin' AND id != ?",
+                "SELECT COUNT(*) AS n FROM users WHERE school_id=? AND role='Admin' AND COALESCE(read_only,0)=0 AND id != ?",
                 [schoolId, targetId],
                 (err, row) => err ? reject(err) : resolve(row.n)
             );
@@ -454,8 +455,9 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
         }
     }
 
-    const setClauses = ["name=?", "email=?", "role=?"];
-    const params = [name, email, role];
+    const readOnly = !!req.body.read_only;
+    const setClauses = ["name=?", "email=?", "role=?", "read_only=?"];
+    const params = [name, email, role, readOnly ? 1 : 0];
 
     if (password && password.trim()) {
         setClauses.push("password_hash=?");
@@ -473,7 +475,7 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
                 const message = err.message.includes("UNIQUE")
                     ? "That email is already registered to another user."
                     : err.message;
-                return res.render("superAdmin/editUser", { user: { id: targetId, name, email, role }, schoolId, returnTo, roles: assignableRoles, secondaryChoices: [], secondaryRoleNames: [], error: message });
+                return res.render("superAdmin/editUser", { user: { id: targetId, name, email, role, read_only: readOnly }, schoolId, returnTo, roles: assignableRoles, secondaryChoices: [], secondaryRoleNames: [], error: message });
             }
 
             try {
@@ -485,7 +487,7 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
             logChange({
                 schoolId, branchId: null, req,
                 entityType: "User", entityName: `${name} (${email})`, action: "Updated",
-                details: `Role: ${role}${password && password.trim() ? ", password reset" : ""}`
+                details: `Role: ${role}${readOnly ? ", view-only (demo)" : ""}${password && password.trim() ? ", password reset" : ""}`
             });
 
             res.redirect(returnTo);
@@ -510,7 +512,7 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
 
     if (target && target.role === "Admin") {
         const adminCount = await new Promise((resolve, reject) => {
-            db.get("SELECT COUNT(*) AS n FROM users WHERE school_id=? AND role='Admin' AND id != ?", [schoolId, targetId], (err, row) => err ? reject(err) : resolve(row.n));
+            db.get("SELECT COUNT(*) AS n FROM users WHERE school_id=? AND role='Admin' AND COALESCE(read_only,0)=0 AND id != ?", [schoolId, targetId], (err, row) => err ? reject(err) : resolve(row.n));
         });
         if (adminCount === 0) {
             return res.send("Can't delete this user - they're the only Admin left for this school. <a href='/super-admin/schools/" + schoolId + "'>Back</a>");

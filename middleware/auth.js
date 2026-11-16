@@ -106,6 +106,11 @@ function requireApiAuth(req, res, next) {
         req.schoolId = payload.schoolId;
         req.userId = payload.userId;
         req.userRole = payload.role;
+        // View-only (demo) accounts can read through the mobile API too,
+        // but never write (see middleware/readOnly.js for the web side).
+        if (payload.readOnly && req.method !== "GET" && req.method !== "HEAD") {
+            return res.status(403).json({ error: "view_only", message: "This is a view-only demo login - changes aren't saved." });
+        }
         next();
     } catch (err) {
         return res.status(401).json({ error: "Invalid or expired token" });

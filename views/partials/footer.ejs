@@ -19,6 +19,42 @@ document.querySelectorAll('.toggle-password').forEach(function (btn) {
 });
 </script>
 
+<% if (typeof readOnly !== 'undefined' && readOnly) { %>
+<script>
+// View-only (demo) login: grey out everything that would change data, so a
+// visitor isn't left clicking Save and wondering why nothing happened. This
+// is only the friendly layer - the server refuses these requests anyway
+// (see middleware/readOnly.js). Search/filter forms (method GET) and
+// report links stay fully usable.
+(function () {
+    var TIP = 'View-only demo - changes are not saved';
+    document.querySelectorAll('form').forEach(function (form) {
+        var method = (form.getAttribute('method') || 'GET').toUpperCase();
+        var action = form.getAttribute('action') || '';
+        if (method === 'GET' || /\/logout$/.test(action)) return;
+        form.querySelectorAll('button, input[type=submit], input[type=image]').forEach(function (btn) {
+            btn.disabled = true;
+            btn.title = TIP;
+            btn.classList.add('opacity-50');
+        });
+        form.addEventListener('submit', function (e) { e.preventDefault(); alert(TIP); });
+    });
+    var blocked = [/\/delete(\/|-|$)/i, /\/remove(\/|$)/i, /\/assign-missing/i, /\/settings\/backup/, /^\/users(\/|$)/, /^\/whatsapp/];
+    document.querySelectorAll('a[href]').forEach(function (a) {
+        var path;
+        try { path = new URL(a.href, location.href).pathname; } catch (e) { return; }
+        if (blocked.some(function (rx) { return rx.test(path); })) {
+            a.classList.add('disabled', 'opacity-50');
+            a.setAttribute('aria-disabled', 'true');
+            a.title = TIP;
+            a.removeAttribute('onclick');
+            a.addEventListener('click', function (e) { e.preventDefault(); });
+        }
+    });
+})();
+</script>
+<% } %>
+
 </body>
 
 </html>

@@ -28,7 +28,7 @@ router.post("/login", (req, res) => {
             if (!valid) return res.status(401).json({ error: "Invalid email or password" });
 
             const token = jwt.sign(
-                { userId: user.id, schoolId: user.school_id, role: user.role },
+                { userId: user.id, schoolId: user.school_id, role: user.role, readOnly: !!user.read_only },
                 JWT_SECRET,
                 { expiresIn: "30d" }
             );
