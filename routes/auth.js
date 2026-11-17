@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
 const { getAssignableRoleNames } = require("../services/capabilities");
+const userBranches = require("../services/userBranches");
 
 /* ===========================================
    LOGIN / LOGOUT
@@ -174,6 +175,9 @@ router.get("/logout", (req, res) => {
    USER MANAGEMENT (Admin only) - add teachers/accountants
    to the SAME school as the logged-in admin
 =========================================== */
+// Branch checkboxes / Branch(es) column on every /users page (see services/userBranches.js).
+router.use("/users", requireLogin, userBranches.loadBranchLocals(req => req.schoolId));
+
 router.get("/users", requireLogin, requireRole("Admin"), async (req, res) => {
 
     try {
@@ -204,7 +208,7 @@ router.post("/users/add", requireLogin, requireRole("Admin"), async (req, res) =
     db.run(
         `INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?,?)`,
         [req.schoolId, name, email, passwordHash, roles.includes(role) ? role : "Teacher"],
-        (err) => {
+        async function (err) {
 
             if (err) {
                 const message = err.message.includes("UNIQUE")
@@ -216,6 +220,12 @@ router.post("/users/add", requireLogin, requireRole("Admin"), async (req, res) =
                     [req.schoolId],
                     (err2, users) => res.render("auth/users", { users: users || [], roles, error: message })
                 );
+            }
+
+            try {
+                await userBranches.setUserBranches(this.lastID, req.schoolId, userBranches.parseBranchIds(req.body));
+            } catch (e) {
+                console.error("Failed to save user branches:", e.message);
             }
 
             res.redirect("/users");
@@ -232,9 +242,10 @@ router.get("/users/delete/:id", requireLogin, requireRole("Admin"), (req, res) =
     db.run(
         "DELETE FROM users WHERE id=? AND school_id=?",
         [req.params.id, req.schoolId],
-        (err) => {
+        async function (err) {
 
             if (err) return res.send(err.message);
+            if (this.changes > 0) await userBranches.deleteForUser(req.params.id).catch(() => {});
 
             res.redirect("/users");
 
@@ -322,7 +333,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
     db.run(
         `UPDATE users SET ${setClauses.join(", ")} WHERE id=? AND school_id=?`,
         params,
-        (err) => {
+        async function (err) {
 
             if (err) {
                 const message = err.message.includes("UNIQUE")
@@ -335,6 +346,14 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
                         res.render("auth/editUser", { user: user || { id: targetId, name, email, role }, roles: assignableRoles, error: message });
                     }
                 );
+            }
+
+            if (this.changes > 0) {
+                try {
+                    await userBranches.setUserBranches(targetId, schoolId, userBranches.parseBranchIds(req.body));
+                } catch (e) {
+                    console.error("Failed to save user branches:", e.message);
+                }
             }
 
             res.redirect("/users");

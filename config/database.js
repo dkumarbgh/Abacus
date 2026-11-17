@@ -1174,6 +1174,19 @@ async function migrate() {
         }
     }
 
+
+    // User <-> Branch links (label only; see services/userBranches.js). One user
+    // can belong to several branches; rows are scoped by school_id.
+    await run(`
+        CREATE TABLE IF NOT EXISTS user_branches(
+            user_id INTEGER NOT NULL,
+            branch_id INTEGER NOT NULL,
+            school_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, branch_id)
+        )
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_user_branches_school ON user_branches(school_id)`);
+
 }
 
 migrate().catch(err => console.error("Migration error:", err));

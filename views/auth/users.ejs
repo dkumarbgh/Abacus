@@ -31,6 +31,7 @@
                             <% }) %>
                         </select>
                     </div>
+                    <%- include("../partials/branchCheckboxes", { idPrefix: "add", selectedIds: [], manageHint: "No branches yet - add them under Lists (Branches / Centres)." }) %>
                     <button class="btn btn-success w-100">Add User</button>
                 </form>
             </div>
@@ -43,7 +44,7 @@
             <div class="card-body">
                 <table class="table table-bordered table-hover">
                     <thead class="table-dark">
-                        <tr><th>Name</th><th>Email</th><th>Role</th><th>Action</th></tr>
+                        <tr><th>Name</th><th>Email</th><th>Role</th><th>Branch(es)</th><th>Action</th></tr>
                     </thead>
                     <tbody>
                         <% users.forEach(u => { %>
@@ -51,6 +52,7 @@
                                 <td><%= u.name %></td>
                                 <td><%= u.email %></td>
                                 <td><span class="badge bg-secondary"><%= u.role %></span></td>
+                                <td><% ((typeof userBranchMap !== "undefined" && userBranchMap[u.id]) || []).forEach(b => { %><span class="badge bg-light text-dark border me-1"><%= b.name %></span><% }) %></td>
                                 <td>
                                     <a href="/users/edit/<%= u.id %>" class="btn btn-primary btn-sm">Edit</a>
                                     <a href="/users/delete/<%= u.id %>" class="btn btn-danger btn-sm" onclick="return confirm('Remove this user?')">Remove</a>

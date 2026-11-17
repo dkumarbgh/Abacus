@@ -22,3 +22,8 @@ face-service/
 # images) is part of the app and must be committed.
 public/uploads/
 backups/
+
+# Playwright test run artifacts
+.test-db/
+test-results/
+playwright-report/

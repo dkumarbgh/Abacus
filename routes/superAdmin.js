@@ -10,6 +10,7 @@ const sqlite3 = require("sqlite3");
 const { requireLogin, requireRole } = require("../middleware/auth");
 const { logChange } = require("../services/auditLog");
 const capabilities = require("../services/capabilities");
+const userBranches = require("../services/userBranches");
 
 // Mirrors the same default used in config/database.js - duplicated here
 // (rather than importing it) because config/database.js exports the open
@@ -36,6 +37,9 @@ const uploadBackup = multer({
 // to managing just one school, unlike the regular per-school Admin role.
 // See scripts/create-super-admin.js for how to create one.
 router.use(requireLogin, requireRole("SuperAdmin"));
+
+// Branch checkboxes / Branch(es) column on a school's user pages (see services/userBranches.js).
+router.use("/schools/:id", userBranches.loadBranchLocals(req => Number(req.params.id) || 0));
 
 /* ===========================================
    CREATE A NEW SCHOOL (+ its first Admin user)
@@ -277,6 +281,7 @@ router.post("/schools/:id/delete", async (req, res) => {
             }
             // Never delete SuperAdmin accounts - their school_id is just a
             // placeholder and may happen to point at the school being deleted.
+            await dbRunP("DELETE FROM user_branches WHERE school_id=?", [school.id]);
             await dbRunP("DELETE FROM users WHERE school_id=? AND role != 'SuperAdmin'", [school.id]);
             await dbRunP("DELETE FROM schools WHERE id=?", [school.id]);
             await dbRunP("COMMIT");
@@ -352,7 +357,7 @@ router.post("/schools/:id/users/add", async (req, res) => {
     db.run(
         `INSERT INTO users (school_id, name, email, password_hash, role, read_only) VALUES (?,?,?,?,?,?)`,
         [schoolId, name, email, passwordHash, role, readOnly ? 1 : 0],
-        (err) => {
+        async function (err) {
 
             if (err) {
                 const message = err.message.includes("UNIQUE")
@@ -371,6 +376,12 @@ router.post("/schools/:id/users/add", async (req, res) => {
                 entityType: "User", entityName: `${name} (${email})`, action: "Created",
                 details: `Role: ${role}${readOnly ? ", view-only (demo)" : ""}`
             });
+
+            try {
+                await userBranches.setUserBranches(this.lastID, schoolId, userBranches.parseBranchIds(req.body));
+            } catch (e) {
+                console.error("Failed to save user branches:", e.message);
+            }
 
             res.redirect(`/super-admin/schools/${schoolId}`);
 
@@ -483,6 +494,11 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
             } catch (e) {
                 console.error("Failed to save additional roles:", e.message);
             }
+            try {
+                await userBranches.setUserBranches(targetId, schoolId, userBranches.parseBranchIds(req.body));
+            } catch (e) {
+                console.error("Failed to save user branches:", e.message);
+            }
 
             logChange({
                 schoolId, branchId: null, req,
@@ -519,9 +535,10 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
         }
     }
 
-    db.run("DELETE FROM users WHERE id=? AND school_id=?", [targetId, schoolId], (err) => {
+    db.run("DELETE FROM users WHERE id=? AND school_id=?", [targetId, schoolId], async function (err) {
 
         if (err) return res.send(err.message);
+        if (this.changes > 0) await userBranches.deleteForUser(targetId).catch(() => {});
 
         logChange({
             schoolId, branchId: null, req,

@@ -10,9 +10,10 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "postinstall": "npx puppeteer browsers install chrome",
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "test:report": "playwright show-report"
+    "test": "playwright test -c playwright.config.ts",
+    "test:headed": "playwright test -c playwright.config.ts --headed",
+    "test:report": "playwright show-report",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "axios": "^1.18.1",
@@ -38,7 +39,9 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.4",
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "^1.48.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
   },
   "allowScripts": {
     "sqlite3@5.1.7": true,

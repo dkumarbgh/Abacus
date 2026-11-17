@@ -30,6 +30,7 @@
                             <% }) %>
                         </select>
                     </div>
+                    <%- include("../partials/branchCheckboxes", { idPrefix: "edit", selectedIds: ((typeof userBranchMap !== "undefined" && userBranchMap[user.id]) || []).map(b => b.id), manageHint: "No branches yet - add them under Lists (Branches / Centres)." }) %>
                     <%- include("../partials/passwordField", { id: "editUserPassword", name: "password", label: "New Password", minlength: 6, placeholder: "Leave blank to keep their current password" }) %>
                     <small class="text-muted d-block mb-3" style="margin-top:-0.75rem">Only fill this in if you want to change/reset their password.</small>
                     <button class="btn btn-primary">Save Changes</button>

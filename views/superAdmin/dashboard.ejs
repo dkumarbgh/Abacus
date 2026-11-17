@@ -34,6 +34,7 @@
                 <td><span class="badge bg-success"><%= s.student_count %></span></td>
                 <td>
                     <a href="/super-admin/schools/<%= s.id %>" class="btn btn-primary btn-sm">Manage</a>
+                    <a href="/super-admin/schools/<%= s.id %>?role=Admin#add-user" class="btn btn-success btn-sm">➕ Add Admin / User</a>
                 </td>
             </tr>
         <% }) %>
