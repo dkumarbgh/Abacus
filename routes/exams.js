@@ -60,7 +60,14 @@ router.get("/", (req, res) => {
                     exam.feeTotalCount = levelStudents.length;
                 }
 
-                res.render("exams", { levels, exams });
+                // A rejected Create Exam (see POST /add) comes back here with
+                // its message and what was typed, shown once.
+                const error = req.session.examError || null;
+                const form = req.session.examForm || {};
+                delete req.session.examError;
+                delete req.session.examForm;
+
+                res.render("exams", { levels, exams, error, form });
 
             }
         );
@@ -84,8 +91,21 @@ router.get("/", (req, res) => {
 =========================================== */
 router.post("/add", async (req, res) => {
 
-    const { exam_name, level_id, academic_year, exam_date, fee_amount } = req.body;
+    const { level_id, exam_date, fee_amount } = req.body;
+    const exam_name = String(req.body.exam_name || "").trim();
+    const academic_year = String(req.body.academic_year || "").trim();
     const schoolId = req.schoolId;
+
+    // The form marks these required, but that's only a browser check - a
+    // direct POST (or a name of just spaces) used to store a blank exam.
+    const missing = [];
+    if (!exam_name) missing.push("Exam Name");
+    if (!academic_year) missing.push("Academic Year");
+    if (missing.length) {
+        req.session.examError = `Please fill in: ${missing.join(", ")}.`;
+        req.session.examForm = { exam_name, level_id, academic_year, exam_date, fee_amount };
+        return res.redirect("/exams");
+    }
 
     try {
 

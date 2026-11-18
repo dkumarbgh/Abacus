@@ -85,14 +85,23 @@ test.describe("Exams", () => {
         await expect(exams.levelSelect).toHaveAttribute("required", "");
     });
 
-    test("BUG: a blank Exam Name is rejected by the server when the browser check is bypassed", async ({ adminPage: page, school }) => {
-        test.fail(true, "Found 2026-11-18: POST /exams/add has no server-side validation; an empty exam_name is stored.");
+    test("a blank Exam Name is rejected by the server when the browser check is bypassed", async ({ adminPage: page, school }) => {
         const exams = new ExamsPage(page);
         await exams.goto();
         await exams.fill({ name: "", level: "Level 1", academicYear: "2026-27" });
         await exams.disableBrowserValidation();
         await exams.submit();
 
+        await expect(exams.error).toContainText("Exam Name");
+        await expect(exams.academicYearInput).toHaveValue("2026-27"); // input kept
+        expect(await dbAll("SELECT id FROM exams WHERE school_id=?", [school.id])).toEqual([]);
+    });
+
+    test("an Exam Name or Academic Year of only spaces is rejected", async ({ adminApi, school }) => {
+        const res = await adminApi.ctx.post("/exams/add", {
+            form: { exam_name: "   ", level_id: String(levelId), academic_year: "  " }, maxRedirects: 0
+        });
+        expect(res.status()).toBe(302);
         expect(await dbAll("SELECT id FROM exams WHERE school_id=?", [school.id])).toEqual([]);
     });
 

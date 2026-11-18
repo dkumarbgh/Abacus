@@ -7,30 +7,33 @@
         <div class="card shadow">
             <div class="card-header bg-primary text-white"><h4>Create Exam</h4></div>
             <div class="card-body">
+                <% if (error) { %>
+                    <div class="alert alert-danger" role="alert"><%= error %></div>
+                <% } %>
                 <form action="/exams/add" method="POST">
                     <div class="mb-3">
                         <label class="form-label">Exam Name</label>
-                        <input type="text" name="exam_name" class="form-control" placeholder="e.g. Term 1 Final" required>
+                        <input type="text" name="exam_name" class="form-control" placeholder="e.g. Term 1 Final" value="<%= form.exam_name || '' %>" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Level</label>
                         <select name="level_id" class="form-select" required>
                             <% levels.forEach(l=>{ %>
-                                <option value="<%= l.id %>"><%= l.name %></option>
+                                <option value="<%= l.id %>" <%= String(form.level_id) === String(l.id) ? 'selected' : '' %>><%= l.name %></option>
                             <% }) %>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Academic Year</label>
-                        <input type="text" name="academic_year" class="form-control" placeholder="2026-2027" required>
+                        <input type="text" name="academic_year" class="form-control" placeholder="2026-2027" value="<%= form.academic_year || '' %>" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Exam Date</label>
-                        <input type="date" name="exam_date" class="form-control">
+                        <input type="date" name="exam_date" class="form-control" value="<%= form.exam_date || '' %>">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Exam Fee (optional)</label>
-                        <input type="number" step="0.01" name="fee_amount" class="form-control" placeholder="Leave blank if this exam has no fee">
+                        <input type="number" step="0.01" name="fee_amount" class="form-control" placeholder="Leave blank if this exam has no fee" value="<%= form.fee_amount || '' %>">
                         <small class="text-muted">
                             If set, this becomes a normal fee item - collect, discount, or waive it per
                             student from Fee Collection just like any other fee. Doesn't block marks entry.

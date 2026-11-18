@@ -29,6 +29,7 @@ export class ExamsPage {
     readonly table: Locator;
     readonly rows: Locator;
     readonly emptyMessage: Locator;
+    readonly error: Locator;
 
     constructor(readonly page: Page) {
         this.heading = page.getByRole("heading", { name: "Create Exam" });
@@ -42,6 +43,7 @@ export class ExamsPage {
         this.table = page.getByRole("table");
         this.rows = this.table.locator("tbody").getByRole("row");
         this.emptyMessage = this.table.getByText("No exams created yet");
+        this.error = page.getByRole("alert");
     }
 
     async goto(): Promise<void> {
