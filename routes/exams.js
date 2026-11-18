@@ -89,6 +89,15 @@ router.post("/add", async (req, res) => {
 
     try {
 
+        // The Level must be one of THIS school's levels - checked before
+        // anything is written, since an exam fee below also creates a fee
+        // category and fee structure for that level.
+        const level = await dbGetOne(
+            "SELECT id FROM lookup_items WHERE id=? AND school_id=? AND list_type='level'",
+            [level_id, schoolId]
+        );
+        if (!level) return res.status(403).send("Invalid level for your school.");
+
         let feeStructureId = null;
         const amount = parseFloat(fee_amount);
 

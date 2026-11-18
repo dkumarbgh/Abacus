@@ -226,12 +226,21 @@ isolationTest.describe("Exams - cross-school isolation", () => {
         expect(await dbAll("SELECT id FROM exams WHERE id=?", [other.examId])).toHaveLength(1);
     });
 
-    isolationTest("BUG: creating an exam against another school's level is rejected", async ({ adminPage: page, school, other }) => {
-        isolationTest.fail(true, "Found 2026-11-18: POST /exams/add does not check that level_id belongs to the logged-in school.");
-        await page.request.post("/exams/add", {
+    isolationTest("creating an exam against another school's level is rejected", async ({ adminPage: page, school, other }) => {
+        const res = await page.request.post("/exams/add", {
             form: { exam_name: "Borrowed Level Exam", level_id: String(other.levelId), academic_year: "2026-27" }, maxRedirects: 0
         });
+        expect(res.status()).toBe(403);
         expect(await dbAll("SELECT id FROM exams WHERE school_id=? AND level_id=?", [school.id, other.levelId])).toEqual([]);
+    });
+
+    isolationTest("an exam fee against another school's level creates no fee item", async ({ adminPage: page, school, other }) => {
+        const res = await page.request.post("/exams/add", {
+            form: { exam_name: "Borrowed Fee Exam", level_id: String(other.levelId), academic_year: "2026-27", fee_amount: "500" }, maxRedirects: 0
+        });
+        expect(res.status()).toBe(403);
+        expect(await dbAll("SELECT id FROM fee_structure WHERE level_id=?", [other.levelId])).toEqual([]);
+        expect(await dbAll("SELECT id FROM fee_categories WHERE school_id=? AND fee_name=?", [school.id, "Exam Fee: Borrowed Fee Exam"])).toEqual([]);
     });
 
 });
