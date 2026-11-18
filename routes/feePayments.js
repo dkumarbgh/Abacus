@@ -229,10 +229,19 @@ router.get("/:studentId", (req, res) => {
 ========================================== */
 router.post("/pay", async (req, res) => {
 
-    const { student_id, fee_structure_id, amount_paid, mode, reference_no, remarks } = req.body;
+    const { student_id, fee_structure_id, mode, reference_no, remarks } = req.body;
     const payment_date = new Date().toISOString().slice(0, 10);
     const schoolId = req.schoolId;
-    const receipt_no = await assignNextReceiptNo(schoolId);
+
+    // The form's number input is only a browser check - a direct POST used
+    // to store anything (-500, 0, "abc", "") as a payment with a receipt.
+    const amount_paid = Number(String(req.body.amount_paid ?? "").trim());
+    if (!Number.isFinite(amount_paid) || amount_paid <= 0) {
+        return res.status(400).send(
+            "Please enter a payment amount greater than zero. " +
+            "<a href='/fee-payments/" + encodeURIComponent(student_id || "") + "'>Go back</a>"
+        );
+    }
 
     // Confirm the student and fee item both belong to this school AND that
     // the fee item actually applies to this student - either a class-wide
@@ -256,7 +265,7 @@ router.post("/pay", async (req, res) => {
             // If Simple Fee Mode is ON for this school, custom/partial amounts
             // aren't allowed - block this route even if hit directly and point
             // at /mark-paid instead, so the Settings toggle can't be bypassed.
-            db.get("SELECT simple_fee_mode FROM schools WHERE id=?", [schoolId], (modeErr, school) => {
+            db.get("SELECT simple_fee_mode FROM schools WHERE id=?", [schoolId], async (modeErr, school) => {
 
                 if (modeErr) return res.send(modeErr.message);
 
@@ -266,6 +275,16 @@ router.post("/pay", async (req, res) => {
                         "<a href='/fee-payments/" + student_id + "'>Go back</a>"
                     );
                 }
+
+            // Only now, once every check has passed, take the next receipt
+            // number - it advances the school's counter, so taking it any
+            // earlier left a gap in the sequence for every refused payment.
+            let receipt_no;
+            try {
+                receipt_no = await assignNextReceiptNo(schoolId);
+            } catch (receiptErr) {
+                return res.send(receiptErr.message);
+            }
 
             db.run(
                 `INSERT INTO fee_payments
@@ -613,7 +632,7 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
 
             if (!studentName && !admissionNo) continue; // skip fully blank rows
 
-            if (!feeName || !academicYear || !paymentDate || isNaN(amountPaid)) {
+            if (!feeName || !academicYear || !paymentDate || !Number.isFinite(amountPaid) || amountPaid <= 0) {
                 rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): missing or invalid Fee Category, Academic Year, Amount Paid, or Payment Date.`);
                 continue;
             }

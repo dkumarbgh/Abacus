@@ -148,12 +148,33 @@ test.describe("Fees", () => {
         expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
     });
 
-    test("BUG: invalid payment amounts (negative, zero, non-numeric, blank) are refused", async ({ adminApi }) => {
-        test.fail(true, "Found 2026-11-18: POST /fee-payments/pay stores amount_paid unvalidated (-500, 0, 'abc' and '' are all saved).");
+    test("invalid payment amounts (negative, zero, non-numeric, blank) are refused", async ({ adminApi }) => {
         const { studentId, structureId } = await feeSetup(adminApi);
-        for (const amount of ["-500", "0", "abc", ""]) await postPayment(adminApi, studentId, structureId, amount);
-
+        for (const amount of ["-500", "0", "abc", "", "Infinity"]) {
+            expect(await postPayment(adminApi, studentId, structureId, amount), `amount ${JSON.stringify(amount)}`).toBe(400);
+        }
         expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
+    });
+
+    test("a decimal payment amount is accepted and stored as a number", async ({ adminApi }) => {
+        const { studentId, structureId } = await feeSetup(adminApi);
+        expect(await postPayment(adminApi, studentId, structureId, " 250.50 ")).toBe(302);
+        const rows = await dbAll<{ amount_paid: number }>("SELECT amount_paid FROM fee_payments WHERE student_id=?", [studentId]);
+        expect(rows).toEqual([{ amount_paid: 250.5 }]);
+    });
+
+    test("a refused payment does not use up a receipt number", async ({ adminApi }) => {
+        const { studentId, structureId } = await feeSetup(adminApi);
+        const nextReceipt = async () => (await dbAll<{ n: number }>(
+            "SELECT receipt_no_next AS n FROM schools WHERE id=?", [adminApi.school.id]))[0].n;
+        const before = await nextReceipt();
+
+        expect(await postPayment(adminApi, studentId, structureId, "-1")).toBe(400);   // invalid amount
+        expect(await postPayment(adminApi, studentId, 999999, "100")).toBe(403);      // not this student's fee item
+        expect(await nextReceipt()).toBe(before);
+
+        expect(await postPayment(adminApi, studentId, structureId, "100")).toBe(302);
+        expect(await nextReceipt()).toBe(before + 1);
     });
 
     test("BUG: receipt numbers are per school (second school's first payment works)", async ({ superAdmin, adminApi, baseURL }) => {
