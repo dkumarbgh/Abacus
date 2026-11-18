@@ -86,15 +86,36 @@ test.describe("Attendance", () => {
         expect(rows).toEqual([{ status: "Present", batch_id: homeBatchId, is_different_batch: 1 }]);
     });
 
-    test("BUG: HTML in a student name must not execute in the Attendance smart search", async ({ adminPage: page, adminApi }) => {
-        test.fail(true, "Known bug: /attendance smart search builds results with innerHTML from unescaped student names (XSS).");
+    const XSS_NAME = `Xss<img src=x onerror="window.__xss=1"> Kid`;
+
+    test("HTML in a student name is shown as text, not run, in the Attendance smart search", async ({ adminPage: page, adminApi }) => {
         const classId = await adminApi.addClass("XSS Class");
-        await adminApi.addStudent({ name: `Xss<img src=x onerror="window.__xss=1"> Kid`, classId });
+        await adminApi.addStudent({ name: XSS_NAME, classId });
 
         const att = new AttendancePage(page);
         await att.goto();
         await att.smartSearch.pressSequentially("Xss");
-        await expect(att.smartSearchResults).toContainText("Kid");
+        await expect(att.smartSearchResults).toContainText(XSS_NAME);
+        await expect(att.smartSearchResults.locator("img[onerror]")).toHaveCount(0);
+        expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+    });
+
+    test("HTML in a student name is shown as text, not run, when added from a different batch", async ({ adminPage: page, adminApi }) => {
+        const classId = await adminApi.addClass("XSS Class");
+        const otherBatchId = await adminApi.addListItem("batch", `Xss<b>Batch</b>`);
+        await adminApi.addStudent({ name: XSS_NAME, classId, batchId: otherBatchId });
+
+        const att = new AttendancePage(page);
+        await att.goto();
+        await att.load(today(), "Mon-Wed Batch");
+        await att.crossBatchSearch.pressSequentially("Xss");
+        await expect(att.crossBatchResults).toContainText(XSS_NAME);
+        await att.crossBatchResults.getByRole("button").first().click();
+
+        const addedRow = att.rosterRows.filter({ hasText: XSS_NAME });
+        await expect(addedRow).toHaveCount(1);
+        await expect(addedRow).toContainText("Different Batch (Xss<b>Batch</b>)");
+        await expect(page.locator("#attendanceForm img[onerror], #attendanceForm b")).toHaveCount(0);
         expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
     });
 

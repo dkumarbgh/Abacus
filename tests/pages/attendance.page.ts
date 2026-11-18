@@ -5,6 +5,9 @@ export class AttendancePage {
     get rosterRows(): Locator { return this.page.locator("#attendanceForm tbody tr"); }
     get smartSearch(): Locator { return this.page.locator("#smartSearch"); }
     get smartSearchResults(): Locator { return this.page.locator("#smartSearchResults"); }
+    /** "Add from Different Batch" search - only rendered once a batch's roster is loaded. */
+    get crossBatchSearch(): Locator { return this.page.locator("#crossBatchSearch"); }
+    get crossBatchResults(): Locator { return this.page.locator("#crossBatchResults"); }
 
     async goto(): Promise<void> { await this.page.goto("/attendance"); }
 
