@@ -142,12 +142,14 @@
                                             </select>
                                             <input type="text" name="reference_no" class="form-control form-control-sm"
                                                    placeholder="UTR / Cheque No. (optional)" style="width: 170px;">
-                                            <button class="btn btn-sm btn-success" type="submit"
-                                                    onclick="return confirm('Mark \'<%= displayName %>\' as fully PAID?')"><%= t('fees.mark_paid') %></button>
+                                            <%# The fee name is passed via data-fee-name, never written into the
+                                                onclick JavaScript itself: an apostrophe there broke the handler. %>
+                                            <button class="btn btn-sm btn-success" type="submit" data-fee-name="<%= displayName %>"
+                                                    onclick="return confirm('Mark ‘' + this.dataset.feeName + '’ as fully PAID?')"><%= t('fees.mark_paid') %></button>
                                         </form>
                                     <% } else { %>
-                                        <button class="btn btn-sm btn-success" type="button"
-                                            onclick="payFee(<%= d.id %>, '<%= displayName %>', <%= d.due %>)">
+                                        <button class="btn btn-sm btn-success" type="button" data-fee-name="<%= displayName %>"
+                                            onclick="payFee(<%= Number(d.id) %>, this.dataset.feeName, <%= Number(d.due) %>)">
                                             <%= t('fees.collect') %>
                                         </button>
                                     <% } %>
@@ -155,8 +157,8 @@
                                     <span class="badge bg-success"><%= t('fees.paid_badge') %></span>
                                 <% } %>
                                 <% if (!simpleFeeMode) { %>
-                                    <button class="btn btn-sm btn-outline-info" type="button"
-                                        onclick="discountFee(<%= d.id %>, '<%= displayName %>')">
+                                    <button class="btn btn-sm btn-outline-info" type="button" data-fee-name="<%= displayName %>"
+                                        onclick="discountFee(<%= Number(d.id) %>, this.dataset.feeName)">
                                         <%= t('fees.discount_waive') %>
                                     </button>
                                 <% } %>

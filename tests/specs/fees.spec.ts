@@ -170,8 +170,7 @@ test.describe("Fees", () => {
         expect(paidB, "School B's payment was not stored").toHaveLength(1);
     });
 
-    test("BUG: an apostrophe in a fee name must not break the Collect button", async ({ adminPage: page, adminApi }) => {
-        test.fail(true, "Known bug: payFee(..., '<%= displayName %>', ...) - an apostrophe ends the JS string, so Collect does nothing.");
+    test("an apostrophe in a fee name does not break the Collect button", async ({ adminPage: page, adminApi }) => {
         const { studentId } = await feeSetup(adminApi, "Founder's Day Fee", 750);
         const errors: string[] = [];
         page.on("pageerror", e => errors.push(e.message));
@@ -180,7 +179,27 @@ test.describe("Fees", () => {
         await fees.goto(studentId);
         await fees.collectButton("Founder").click();
         await expect(fees.payAmount).toBeVisible();
+        await expect(fees.payAmount).toHaveValue("750");
+        await expect(fees.payFeeName).toHaveText("Founder's Day Fee");
         expect(errors).toEqual([]);
+    });
+
+    test("with an apostrophe in the fee name, Mark Paid still asks first and cancelling saves nothing", async ({ adminPage: page, adminApi }) => {
+        // Before the fix the onclick didn't compile, so the form submitted with no confirmation at all.
+        const { studentId } = await feeSetup(adminApi, "Founder's Day Fee", 750);
+        await setSimpleFeeMode(adminApi, true);
+
+        const fees = new FeePaymentsPage(page);
+        await fees.goto(studentId);
+        // click() cannot finish while confirm() is open, so answer it from a listener.
+        const messages: string[] = [];
+        page.once("dialog", d => { messages.push(d.message()); void d.dismiss(); });
+        await fees.markPaidButton("Founder").click();
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain("Founder's Day Fee");
+        await expect(fees.statusBadge("Founder")).toHaveText("Not Paid");
+        expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
     });
 
 });

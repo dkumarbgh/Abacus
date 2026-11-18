@@ -22,6 +22,8 @@ export class FeePaymentsPage {
         return this.page.locator("table", { has: this.page.locator("th", { hasText: "Receipt No." }) }).locator("tbody tr");
     }
     get payAmount(): Locator { return this.page.locator("#payAmount"); }
+    /** Fee name shown in the "Record Payment" card's heading once Collect is clicked. */
+    get payFeeName(): Locator { return this.page.locator("#payFeeName"); }
 
     async goto(studentId: number): Promise<void> { await this.page.goto(`/fee-payments/${studentId}`); }
 
