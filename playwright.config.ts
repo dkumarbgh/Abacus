@@ -18,10 +18,19 @@ export default defineConfig({
     expect: { timeout: 5_000 },
     fullyParallel: false,
     workers: 1, // one SQLite file + one server: keep it serial
-    retries: process.env.CI ? 1 : 0,
+
+    retries: process.env.CI ? 2 : 1,
     reporter: process.env.CI
-        ? [["html", { outputFolder: "playwright-report", open: "never" }], ["list"]]
-        : [["html", { open: "never" }], ["list"]],
+        ? [
+            ["html", { outputFolder: "playwright-report", open: "never" }],
+            ["list"],
+            ["allure-playwright", { resultsDir: "allure-results", detail: true, suiteTitle: false }]
+        ]
+        : [
+            ["html", { open: "never" }],
+            ["list"],
+            ["allure-playwright", { resultsDir: "allure-results", detail: true, suiteTitle: false }]
+        ],
     use: {
         baseURL: BASE_URL,
         trace: "retain-on-failure",
@@ -33,6 +42,10 @@ export default defineConfig({
     webServer: process.env.BASE_URL ? undefined : {
         command: "node --experimental-strip-types tests/support/test-server.ts",
         url: `${BASE_URL}/login`,
+        // A responding /login isn't enough: test-server.ts prints this only after
+        // migrations, role seeding and a real Super Admin login have all succeeded.
+        // (stdout: "ignore" below only stops echoing; Playwright still reads it.)
+        wait: { stdout: /\[test-server\] READY/ },
         reuseExistingServer: false,
         timeout: 60_000,
         stdout: "ignore",

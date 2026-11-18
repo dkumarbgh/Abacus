@@ -133,6 +133,15 @@ export class SchoolApi {
         }, "record payment");
     }
 
+    /** Creates an exam through /exams/add. A feeAmount also auto-creates its fee category + fee structure. */
+    async addExam(e: { name: string; levelId: number; academicYear?: string; examDate?: string; feeAmount?: number }): Promise<number> {
+        await this.postForm("/exams/add", {
+            exam_name: e.name, level_id: e.levelId, academic_year: e.academicYear ?? "2026-27",
+            exam_date: e.examDate ?? "", fee_amount: e.feeAmount ?? ""
+        }, "add exam");
+        return latestId("exams", this.school.id, "exam_name=?", [e.name]);
+    }
+
     async setReceiptPrefix(prefix: string): Promise<void> {
         await this.postForm("/settings/receipt-no", { receipt_no_prefix: prefix, receipt_no_format: "sequential", receipt_no_digits: 4 }, "receipt settings");
     }

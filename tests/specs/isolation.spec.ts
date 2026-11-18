@@ -63,13 +63,26 @@ test.describe("Cross-school isolation", () => {
         expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [other.studentId])).toEqual([]);
     });
 
-    test("BUG: marking attendance for another school's student via the web form is ignored", async ({ adminPage: page, other, adminApi }) => {
-        test.fail(true, "Found 2026-11-17: /attendance/save inserts cross_batch_student ids without checking they belong to the logged-in school.");
+    test("marking attendance for another school's student via the web form is ignored", async ({ adminPage: page, other, adminApi }) => {
+        // Fixed 2026-11-18: /attendance/save now drops cross_batch_student ids from other schools
+        // and awaits its inserts before redirecting (they used to race this DB read).
         const batchId = await adminApi.addListItem("batch", "My Batch");
         await page.request.post("/attendance/save", {
             form: { attendance_date: "2026-08-21", batch_id: String(batchId), cross_batch_student: String(other.studentId) }, maxRedirects: 0
         });
         expect(await dbAll("SELECT id FROM attendance WHERE student_id=?", [other.studentId])).toEqual([]);
+    });
+
+    test("saving attendance under another school's batch is refused", async ({ adminPage: page, adminApi, other }) => {
+        const otherBatchId = await other.api.addListItem("batch", "Secret Batch");
+        const classId = await adminApi.addClass("My Class");
+        const myStudent = await adminApi.addStudent({ name: "My Kid", classId });
+
+        const res = await page.request.post("/attendance/save", {
+            form: { attendance_date: "2026-08-22", batch_id: String(otherBatchId), cross_batch_student: String(myStudent) }, maxRedirects: 0
+        });
+        expect(res.status()).toBe(403);
+        expect(await dbAll("SELECT id FROM attendance WHERE batch_id=?", [otherBatchId])).toEqual([]);
     });
 
 });

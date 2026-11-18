@@ -358,92 +358,98 @@ router.post("/save", async (req, res) => {
     const presentIds = [].concat(req.body.student || []).map(String);
     const crossBatchIds = [].concat(req.body.cross_batch_student || []).map(String);
 
-    let defaultHours;
     try {
-        defaultHours = await getDefaultHoursAttended(schoolId);
-    } catch (err) {
-        return res.send(err.message);
-    }
 
-    // Wipe out whatever was previously saved for THIS batch+date (scoped
-    // by batch_id, not student - a student's OWN attendance record for a
-    // DIFFERENT batch on the same day, if any, is untouched, since a
-    // makeup session and a home session are two separate real sessions).
-    db.run(
-        `DELETE FROM attendance WHERE attendance_date=? AND school_id=? AND batch_id=?`,
-        [attendance_date, schoolId, batch_id],
-        (err) => {
+        // The batch must be one of THIS school's batches - otherwise rows
+        // would be written under another school's batch id.
+        const batch = await dbGetOne(
+            "SELECT id, name FROM lookup_items WHERE id=? AND school_id=? AND list_type='batch'",
+            [batch_id, schoolId]
+        );
+        if (!batch) return res.status(403).send("Invalid batch for your school.");
 
-            if (err) return res.send(err.message);
+        const defaultHours = await getDefaultHoursAttended(schoolId);
 
-            db.all(
-                "SELECT id FROM students WHERE batch_id=? AND school_id=?",
-                [batch_id, schoolId],
-                (rosterErr, homeRoster) => {
+        // Wipe out whatever was previously saved for THIS batch+date (scoped
+        // by batch_id, not student - a student's OWN attendance record for a
+        // DIFFERENT batch on the same day, if any, is untouched, since a
+        // makeup session and a home session are two separate real sessions).
+        await dbRun(
+            `DELETE FROM attendance WHERE attendance_date=? AND school_id=? AND batch_id=?`,
+            [attendance_date, schoolId, batch_id]
+        );
 
-                    if (rosterErr) return res.send(rosterErr.message);
+        const homeRoster = await dbAll("SELECT id FROM students WHERE batch_id=? AND school_id=?", [batch_id, schoolId]);
+        const homeRosterIds = new Set(homeRoster.map(s => String(s.id)));
 
-                    // Home roster - Present for checked students, Absent for
-                    // everyone else (recording the whole roster, not just
-                    // who's Present, is what makes attendance % accurate -
-                    // see the historical note this replaced).
-                    homeRoster.forEach(student => {
-                        const isPresent = presentIds.includes(String(student.id));
-                        const status = isPresent ? "Present" : "Absent";
-                        const hours = isPresent ? parseHours(req.body[`hours_${student.id}`], defaultHours) : null;
-                        db.run(
-                            `INSERT INTO attendance (student_id, attendance_date, status, batch_id, is_different_batch, hours_attended, school_id)
-                             VALUES (?,?,?,?,0,?,?)`,
-                            [student.id, attendance_date, status, batch_id, hours, schoolId]
-                        );
-                    });
+        // Cross-batch visitors - only students that belong to THIS school.
+        // The ids come straight from the form, so anything else (another
+        // school's student, a made-up id) is dropped here rather than
+        // trusted. A student already on the HOME roster is skipped too, even
+        // if the client somehow submitted them as a cross-batch entry (the
+        // search/add UI guards against this, but this is a server-side
+        // backstop so a student can never end up with two attendance rows
+        // for the same batch+date).
+        const requestedVisitors = [...new Set(crossBatchIds)].filter(id => !homeRosterIds.has(id));
+        const visitorIds = requestedVisitors.length === 0 ? [] : (await dbAll(
+            `SELECT id FROM students WHERE school_id=? AND id IN (${requestedVisitors.map(() => "?").join(",")})`,
+            [schoolId, ...requestedVisitors]
+        )).map(s => String(s.id));
 
-                    // Cross-batch visitors - always Present (there's no
-                    // "absent from a batch you don't belong to"), flagged
-                    // distinctly so reports can tell home vs. makeup apart.
-                    // A student already on the HOME roster is skipped here
-                    // even if the client somehow submitted them as a
-                    // cross-batch entry too (the search/add UI guards
-                    // against this, but this is a server-side backstop so a
-                    // student can never end up with two attendance rows for
-                    // the same batch+date).
-                    const homeRosterIds = new Set(homeRoster.map(s => String(s.id)));
-                    crossBatchIds.forEach(studentId => {
-                        if (homeRosterIds.has(String(studentId))) return;
-                        const hours = parseHours(req.body[`hours_${studentId}`], defaultHours);
-                        db.run(
-                            `INSERT INTO attendance (student_id, attendance_date, status, batch_id, is_different_batch, hours_attended, school_id)
-                             VALUES (?,?,'Present',?,1,?,?)`,
-                            [studentId, attendance_date, batch_id, hours, schoolId]
-                        );
-                    });
+        // Every insert is awaited BEFORE redirecting. They used to be
+        // fire-and-forget, so the reloaded roster (and anything reading the
+        // DB right after the save) could miss rows that were still being
+        // written.
 
-                    // Back to the SAME loaded roster (not the blank
-                    // Attendance home page) so it's immediately obvious the
-                    // save worked and what got saved - this is also what
-                    // lets a re-visit of this batch+date show the
-                    // already-saved data instead of looking like a blank
-                    // slate that might get duplicated on a second save.
-                    res.redirect(`/attendance/load?batch_id=${encodeURIComponent(batch_id)}&attendance_date=${encodeURIComponent(attendance_date)}`);
-
-                    // One summary entry per save action (not per student)
-                    // to avoid flooding the log - branch_id is left NULL
-                    // here since a batch can mix students from different
-                    // branches; the per-student detail is still in the
-                    // attendance records themselves for whoever needs it.
-                    db.get("SELECT name FROM lookup_items WHERE id=?", [batch_id], (errB, batch) => {
-                        logChange({
-                            schoolId, branchId: null, req,
-                            entityType: "Attendance", entityName: batch ? batch.name : `Batch #${batch_id}`,
-                            action: "Saved",
-                            details: `${attendance_date}: ${presentIds.length} present (home), ${homeRoster.length - presentIds.length} absent, ${crossBatchIds.length} cross-batch`
-                        });
-                    });
-
-                }
+        // Home roster - Present for checked students, Absent for everyone
+        // else (recording the whole roster, not just who's Present, is what
+        // makes attendance % accurate - see the historical note this replaced).
+        let presentCount = 0;
+        for (const student of homeRoster) {
+            const isPresent = presentIds.includes(String(student.id));
+            if (isPresent) presentCount++;
+            const status = isPresent ? "Present" : "Absent";
+            const hours = isPresent ? parseHours(req.body[`hours_${student.id}`], defaultHours) : null;
+            await dbRun(
+                `INSERT INTO attendance (student_id, attendance_date, status, batch_id, is_different_batch, hours_attended, school_id)
+                 VALUES (?,?,?,?,0,?,?)`,
+                [student.id, attendance_date, status, batch_id, hours, schoolId]
             );
+        }
 
+        // Cross-batch visitors - always Present (there's no "absent from a
+        // batch you don't belong to"), flagged distinctly so reports can
+        // tell home vs. makeup apart.
+        for (const studentId of visitorIds) {
+            const hours = parseHours(req.body[`hours_${studentId}`], defaultHours);
+            await dbRun(
+                `INSERT INTO attendance (student_id, attendance_date, status, batch_id, is_different_batch, hours_attended, school_id)
+                 VALUES (?,?,'Present',?,1,?,?)`,
+                [studentId, attendance_date, batch_id, hours, schoolId]
+            );
+        }
+
+        // Back to the SAME loaded roster (not the blank Attendance home
+        // page) so it's immediately obvious the save worked and what got
+        // saved - this is also what lets a re-visit of this batch+date show
+        // the already-saved data instead of looking like a blank slate that
+        // might get duplicated on a second save.
+        res.redirect(`/attendance/load?batch_id=${encodeURIComponent(batch_id)}&attendance_date=${encodeURIComponent(attendance_date)}`);
+
+        // One summary entry per save action (not per student) to avoid
+        // flooding the log - branch_id is left NULL here since a batch can
+        // mix students from different branches; the per-student detail is
+        // still in the attendance records themselves for whoever needs it.
+        logChange({
+            schoolId, branchId: null, req,
+            entityType: "Attendance", entityName: batch.name,
+            action: "Saved",
+            details: `${attendance_date}: ${presentCount} present (home), ${homeRoster.length - presentCount} absent, ${visitorIds.length} cross-batch`
         });
+
+    } catch (err) {
+        res.send(err.message);
+    }
 
 });
 

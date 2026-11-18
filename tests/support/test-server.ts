@@ -40,25 +40,59 @@ function q(sql: string, params: unknown[] = []): Promise<any[]> {
     return new Promise((resolve, reject) => db.all(sql, params, (err: Error | null, rows: any[]) => err ? reject(err) : resolve(rows)));
 }
 
-async function waitForMigrations(): Promise<void> {
-    // migrate() exposes no "done" signal; poll until the schema stops changing.
-    let last = -1;
-    for (let i = 0; i < 100; i++) {
-        await new Promise(r => setTimeout(r, 300));
-        const cols = await q("SELECT COUNT(*) AS n FROM pragma_table_info('users')").catch(() => [{ n: 0 }]);
-        const tables = await q("SELECT COUNT(*) AS n FROM sqlite_master").catch(() => [{ n: 0 }]);
-        const sig = cols[0].n * 10000 + tables[0].n;
-        if (cols[0].n > 0 && sig === last) return;
-        last = sig;
+const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
+
+/** Retries `check` until it returns true, or throws after `timeoutMs`. */
+async function waitUntil(what: string, check: () => Promise<boolean>, timeoutMs = 45_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    let lastError: unknown;
+    while (Date.now() < deadline) {
+        try {
+            if (await check()) return;
+        } catch (err) {
+            lastError = err;
+        }
+        await sleep(250);
     }
-    throw new Error("Test DB migrations did not settle in time");
+    throw new Error(`Timed out waiting for ${what}${lastError ? `: ${String(lastError)}` : ""}`);
+}
+
+/**
+ * The real end-to-end readiness check: the server is listening, migrations
+ * are done, and the seeded Super Admin can log in exactly as the suite will
+ * (302 to /super-admin, not back to /login).
+ */
+async function superAdminCanLogIn(): Promise<boolean> {
+    const res = await fetch(`http://localhost:${process.env.PORT}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ email: SUPER_ADMIN_EMAIL, password: SUPER_ADMIN_PASSWORD }).toString(),
+        redirect: "manual"
+    });
+    return res.status === 302 && /^\/super-admin/.test(res.headers.get("location") ?? "");
+}
+
+/** app.js seeds roles/capabilities fire-and-forget; every system role must have its grants. */
+async function rolesSeeded(): Promise<boolean> {
+    const rows = await q(
+        `SELECT COUNT(DISTINCT rc.role_id) AS n FROM role_capabilities rc
+         JOIN roles r ON r.id = rc.role_id WHERE r.is_system = 1`);
+    return rows[0].n >= 4;
 }
 
 (async () => {
-    await waitForMigrations();
+    // Wait for the real end of migrate() - polling the schema can stop in a
+    // gap before the users-table rebuild and lose the row seeded below.
+    await db.ready;
     const hash = bcrypt.hashSync(SUPER_ADMIN_PASSWORD, 10);
     await q(`INSERT INTO users (school_id, name, email, password_hash, role) VALUES (0, 'Test Super Admin', ?, ?, 'SuperAdmin')`,
         [SUPER_ADMIN_EMAIL, hash]);
-    console.log(`[test-server] DB ${DB_PATH} ready, Super Admin ${SUPER_ADMIN_EMAIL} seeded`);
+    console.log(`[test-server] DB ${DB_PATH} migrated, Super Admin ${SUPER_ADMIN_EMAIL} seeded`);
+
     require(path.join(ROOT, "app.js"));
+
+    await waitUntil("roles/capabilities seeding", rolesSeeded);
+    await waitUntil(`a successful Super Admin login on port ${process.env.PORT}`, superAdminCanLogIn);
+    // playwright.config.ts waits for this exact line before running any test.
+    console.log("[test-server] READY");
 })().catch(err => { console.error("[test-server] failed:", err); process.exit(1); });

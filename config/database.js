@@ -1189,6 +1189,12 @@ async function migrate() {
 
 }
 
-migrate().catch(err => console.error("Migration error:", err));
+// Still fire-and-forget for the app itself (behaviour unchanged), but the
+// promise is exposed as db.ready so callers that must not race the
+// migrations - e.g. tests/support/test-server.ts seeding its Super Admin -
+// can wait for them to finish. It rejects if a migration fails.
+const migrated = migrate();
+migrated.catch(err => console.error("Migration error:", err));
+db.ready = migrated;
 
 module.exports = db;

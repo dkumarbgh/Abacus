@@ -1,6 +1,7 @@
 import { test, expect } from "../fixtures";
-import type { SchoolApi } from "../support/api";
+import { SchoolApi, SuperAdminApi, loginApi, newContext } from "../support/api";
 import { FeePaymentsPage } from "../pages/fees.page";
+import { DEFAULT_PASSWORD, uniqueEmail, uniqueSuffix } from "../support/data";
 import { dbAll } from "../support/db";
 
 /**
@@ -19,16 +20,42 @@ async function feeSetup(api: SchoolApi, feeName = "Tuition Fee", amount = 10000,
     return { studentId, structureId, levelId, classId };
 }
 
+async function setSimpleFeeMode(api: SchoolApi, on: boolean): Promise<void> {
+    const res = await api.ctx.post("/settings/fee-mode", { form: on ? { simple_fee_mode: "on" } : {}, maxRedirects: 0 });
+    expect(res.status(), "set Simple Fee Mode").toBe(302);
+}
+
+/** Runs `fn` with a second school's Admin session, always disposing it. */
+async function withOtherSchool<T>(superAdmin: SuperAdminApi, baseURL: string | undefined, fn: (api: SchoolApi) => Promise<T>): Promise<T> {
+    const school = await superAdmin.createSchool();
+    const ctx = await newContext(String(baseURL));
+    try {
+        await loginApi(ctx, school.adminEmail, school.password);
+        return await fn(new SchoolApi(ctx, school));
+    } finally {
+        await ctx.dispose();
+    }
+}
+
+/** Posts a payment directly, bypassing the form, and returns the HTTP status. */
+async function postPayment(api: SchoolApi, studentId: number, structureId: number, amount: string): Promise<number> {
+    const res = await api.ctx.post("/fee-payments/pay", {
+        form: { student_id: String(studentId), fee_structure_id: String(structureId), amount_paid: amount, mode: "Cash" }, maxRedirects: 0
+    });
+    return res.status();
+}
+
 test.describe("Fees", () => {
 
     test("a partial payment reduces the amount due", async ({ adminPage: page, adminApi }) => {
         const { studentId } = await feeSetup(adminApi);
         const fees = new FeePaymentsPage(page);
         await fees.goto(studentId);
-        await expect(fees.dueRow("Tuition Fee")).toContainText(/10,?000/);
+        await expect(fees.dueCell("Tuition Fee", "due")).toHaveText("₹10000");
 
         await fees.collect("Tuition Fee", 4000);
-        await expect(fees.dueRow("Tuition Fee")).toContainText(/6,?000/);
+        await expect(fees.dueCell("Tuition Fee", "paid")).toHaveText("₹4000");
+        await expect(fees.dueCell("Tuition Fee", "due")).toHaveText("₹6000");
         await expect(fees.historyRows).toHaveCount(1);
     });
 
@@ -37,8 +64,8 @@ test.describe("Fees", () => {
         const fees = new FeePaymentsPage(page);
         await fees.goto(studentId);
         await fees.collect("Tuition Fee", 10000);
-        await expect(fees.dueRow("Tuition Fee").locator(".badge")).toContainText(/paid/i);
-        await expect(fees.dueRow("Tuition Fee").locator('button:has-text("Collect")')).toHaveCount(0);
+        await expect(fees.statusBadge("Tuition Fee")).toHaveText("Paid");
+        await expect(fees.collectButton("Tuition Fee")).toHaveCount(0);
     });
 
     test("each payment gets its own receipt number", async ({ adminPage: page, adminApi }) => {
@@ -48,27 +75,85 @@ test.describe("Fees", () => {
 
         const fees = new FeePaymentsPage(page);
         await fees.goto(studentId);
+        await expect(fees.historyRows).toHaveCount(2);
         const receipts = await fees.receiptNumbers();
-        expect(receipts).toHaveLength(2);
         expect(new Set(receipts).size).toBe(2);
         for (const r of receipts) expect(r).not.toBe("-");
 
-        const stored = await dbAll<{ receipt_no: string }>("SELECT receipt_no FROM fee_payments WHERE student_id=? ORDER BY receipt_no", [studentId]);
+        const stored = await dbAll<{ receipt_no: string }>("SELECT receipt_no FROM fee_payments WHERE student_id=?", [studentId]);
         expect(stored.map(s => s.receipt_no).sort()).toEqual([...receipts].sort());
     });
 
-    test("Simple Fee Mode hides amounts and Mark Paid settles a fee in one click", async ({ adminPage: page, adminApi }) => {
+    test("Simple Fee Mode hides amounts and shows Not Paid", async ({ adminPage: page, adminApi }) => {
         const { studentId } = await feeSetup(adminApi);
-        const res = await adminApi.ctx.post("/settings/fee-mode", { form: { simple_fee_mode: "on" }, maxRedirects: 0 });
-        expect(res.status()).toBe(302);
+        await setSimpleFeeMode(adminApi, true);
 
         const fees = new FeePaymentsPage(page);
         await fees.goto(studentId);
         await expect(fees.dueRow("Tuition Fee")).not.toContainText("₹");
-        await expect(fees.dueRow("Tuition Fee").locator(".badge")).toContainText(/not paid/i);
+        await expect(fees.statusBadge("Tuition Fee")).toHaveText("Not Paid");
+    });
 
+    test("in Simple Fee Mode, Mark Paid settles the fee in one click", async ({ adminPage: page, adminApi }) => {
+        const { studentId } = await feeSetup(adminApi);
+        await setSimpleFeeMode(adminApi, true);
+
+        const fees = new FeePaymentsPage(page);
+        await fees.goto(studentId);
         await fees.markPaid("Tuition Fee");
-        await expect(fees.dueRow("Tuition Fee").locator(".badge").first()).toHaveText(/^\s*paid\s*$/i);
+        await expect(fees.statusBadge("Tuition Fee")).toHaveText("Paid");
+        await expect(fees.markPaidButton("Tuition Fee")).toHaveCount(0);
+    });
+
+    test("in Simple Fee Mode, a partial payment posted directly is refused", async ({ adminApi }) => {
+        const { studentId, structureId } = await feeSetup(adminApi);
+        await setSimpleFeeMode(adminApi, true);
+
+        expect(await postPayment(adminApi, studentId, structureId, "100")).toBe(403);
+        expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
+    });
+
+    test("a payment against a fee item for a different level is refused", async ({ adminApi }) => {
+        const { studentId } = await feeSetup(adminApi);
+        const otherLevel = await adminApi.addListItem("level", "Level 2");
+        const otherFee = await adminApi.addFeeStructure({
+            levelId: otherLevel, categoryId: await adminApi.addFeeCategory("Level 2 Fee"), amount: 900
+        });
+
+        expect(await postPayment(adminApi, studentId, otherFee, "100")).toBe(403);
+        expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
+    });
+
+    test("a payment against another school's fee item is refused", async ({ adminApi, superAdmin, baseURL }) => {
+        const { studentId } = await feeSetup(adminApi);
+        const otherFee = await withOtherSchool(superAdmin, baseURL, async apiB => (await feeSetup(apiB)).structureId);
+
+        expect(await postPayment(adminApi, studentId, otherFee, "100")).toBe(403);
+        expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
+    });
+
+    test("a role without Fee Payments cannot open the page or record a payment", async ({ page, school, superAdmin, adminApi, loginAs }) => {
+        const { studentId, structureId } = await feeSetup(adminApi);
+        const roleName = `QA No Fee Payments ${uniqueSuffix()}`;
+        await superAdmin.createRole(roleName, ["attendance"]);
+        const email = uniqueEmail("no-fee-payments");
+        await superAdmin.addUser(school.id, { name: "No Fees User", email, role: roleName });
+        await loginAs(email, DEFAULT_PASSWORD);
+
+        expect((await page.goto(`/fee-payments/${studentId}`))?.status()).toBe(403);
+        const res = await page.request.post("/fee-payments/pay", {
+            form: { student_id: String(studentId), fee_structure_id: String(structureId), amount_paid: "100", mode: "Cash" }, maxRedirects: 0
+        });
+        expect(res.status()).toBe(403);
+        expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
+    });
+
+    test("BUG: invalid payment amounts (negative, zero, non-numeric, blank) are refused", async ({ adminApi }) => {
+        test.fail(true, "Found 2026-11-18: POST /fee-payments/pay stores amount_paid unvalidated (-500, 0, 'abc' and '' are all saved).");
+        const { studentId, structureId } = await feeSetup(adminApi);
+        for (const amount of ["-500", "0", "abc", ""]) await postPayment(adminApi, studentId, structureId, amount);
+
+        expect(await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [studentId])).toEqual([]);
     });
 
     test("BUG: receipt numbers are per school (second school's first payment works)", async ({ superAdmin, adminApi, baseURL }) => {
@@ -77,17 +162,11 @@ test.describe("Fees", () => {
         const a = await feeSetup(adminApi, "Tuition Fee", 10000, false);
         await adminApi.pay(a.studentId, a.structureId, 500);
 
-        const { SchoolApi, newContext, loginApi } = await import("../support/api");
-        const schoolB = await superAdmin.createSchool();
-        const ctx = await newContext(String(baseURL));
-        await loginApi(ctx, schoolB.adminEmail, schoolB.password);
-        const apiB = new SchoolApi(ctx, schoolB);
-        const b = await feeSetup(apiB, "Tuition Fee", 10000, false);
-        await apiB.ctx.post("/fee-payments/pay", {
-            form: { student_id: String(b.studentId), fee_structure_id: String(b.structureId), amount_paid: "500", mode: "Cash" }
+        const paidB = await withOtherSchool(superAdmin, baseURL, async apiB => {
+            const b = await feeSetup(apiB, "Tuition Fee", 10000, false);
+            await postPayment(apiB, b.studentId, b.structureId, "500");
+            return dbAll("SELECT id FROM fee_payments WHERE student_id=?", [b.studentId]);
         });
-        const paidB = await dbAll("SELECT id FROM fee_payments WHERE student_id=?", [b.studentId]);
-        await apiB.dispose();
         expect(paidB, "School B's payment was not stored").toHaveLength(1);
     });
 
@@ -99,8 +178,8 @@ test.describe("Fees", () => {
 
         const fees = new FeePaymentsPage(page);
         await fees.goto(studentId);
-        await fees.dueRow("Founder").locator('button:has-text("Collect")').click();
-        await expect(fees.payAmount).toBeVisible({ timeout: 2000 });
+        await fees.collectButton("Founder").click();
+        await expect(fees.payAmount).toBeVisible();
         expect(errors).toEqual([]);
     });
 
