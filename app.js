@@ -59,6 +59,7 @@ const certificateRoutes = require("./routes/certificates");
 const levelPromotionRoutes = require("./routes/levelPromotion");
 const testPaperRoutes = require("./routes/testPapers");
 const leadsRoutes = require("./routes/leads");
+const myAccountRoutes = require("./routes/myAccount");
 
 
 
@@ -161,6 +162,7 @@ app.use("/certificates", certificateRoutes);
 app.use("/level-promotion", levelPromotionRoutes);
 app.use("/test-papers", testPaperRoutes);
 app.use("/leads", leadsRoutes);
+app.use("/my-account", myAccountRoutes);
 
 // Dashboard
 app.get("/", requireLogin, (req, res) => {

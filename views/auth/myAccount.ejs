@@ -1,0 +1,58 @@
+<%- include("../partials/header") %>
+<% if (isSuperAdmin && !impersonating) { %>
+<%- include("../partials/superAdminNav") %>
+<% } else { %>
+<%- include("../partials/navbar") %>
+<% } %>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">👤 My Account</h4>
+            </div>
+            <div class="card-body">
+
+                <% if (saved) { %>
+                    <div class="alert alert-success">Your account has been updated.</div>
+                <% } %>
+                <% if (error) { %>
+                    <div class="alert alert-danger"><%= error %></div>
+                <% } %>
+                <% if (impersonating) { %>
+                    <div class="alert alert-warning">You're viewing a school as Admin. <a href="/exit-impersonation">Exit</a> first to change your own account.</div>
+                <% } %>
+
+                <form action="/my-account" method="POST" autocomplete="off">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" value="<%= user.name %>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Login Email</label>
+                        <% if (isSuperAdmin) { %>
+                            <input type="email" name="email" class="form-control" value="<%= user.email %>" required>
+                            <small class="text-muted">Typed exactly as you'll log in with it.</small>
+                        <% } else { %>
+                            <input type="email" class="form-control" value="<%= user.email %>" disabled>
+                            <small class="text-muted">Ask your school Admin to change your login email.</small>
+                        <% } %>
+                    </div>
+
+                    <hr>
+                    <%- include("../partials/passwordField", { id: "myNewPassword", name: "new_password", label: "New Password", minlength: minPassword, placeholder: "Leave blank to keep your current password" }) %>
+                    <%- include("../partials/passwordField", { id: "myConfirmPassword", name: "confirm_password", label: "Confirm New Password", minlength: minPassword, placeholder: "Type the new password again" }) %>
+
+                    <hr>
+                    <%- include("../partials/passwordField", { id: "myCurrentPassword", name: "current_password", label: "Current Password", required: true, placeholder: "Required to save any change" }) %>
+
+                    <button class="btn btn-primary" <%= impersonating ? "disabled" : "" %>>Save Changes</button>
+                    <a href="<%= isSuperAdmin && !impersonating ? '/super-admin' : '/' %>" class="btn btn-secondary">Cancel</a>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include("../partials/footer") %>

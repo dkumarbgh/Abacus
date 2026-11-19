@@ -27,3 +27,5 @@ backups/
 .test-db/
 test-results/
 playwright-report/
+allure-results/
+allure-report/

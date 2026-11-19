@@ -17,6 +17,10 @@
  * SuperAdmin (and updates their password) instead of creating a duplicate.
  */
 
+// Load .env FIRST so DB_PATH points at the live database (e.g.
+// /var/www/data/school.db on the VPS), not a stray ./school.db.
+require("dotenv").config();
+
 const bcrypt = require("bcryptjs");
 const db = require("../config/database");
 
