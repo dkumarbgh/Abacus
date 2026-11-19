@@ -111,7 +111,7 @@ router.get("/", (req, res) => {
     db.all(`
         SELECT
             schools.*,
-            (SELECT COUNT(*) FROM users WHERE users.school_id = schools.id) AS user_count,
+            (SELECT COUNT(*) FROM users WHERE users.school_id = schools.id AND users.role != 'SuperAdmin') AS user_count,
             (SELECT COUNT(*) FROM students WHERE students.school_id = schools.id) AS student_count
         FROM schools
         ORDER BY schools.created_at DESC
@@ -140,7 +140,7 @@ router.get("/schools/:id", async (req, res) => {
             if (!school) return res.send("School not found");
 
             db.all(
-                "SELECT id, name, email, role, read_only, created_at FROM users WHERE school_id=? ORDER BY name",
+                "SELECT id, name, email, role, read_only, created_at FROM users WHERE school_id=? AND role != 'SuperAdmin' ORDER BY name",
                 [req.params.id],
                 (err2, users) => {
 
@@ -365,7 +365,7 @@ router.post("/schools/:id/users/add", async (req, res) => {
                     : err.message;
 
                 return db.get("SELECT * FROM schools WHERE id=?", [schoolId], (err2, school) => {
-                    db.all("SELECT id, name, email, role, read_only, created_at FROM users WHERE school_id=? ORDER BY name", [schoolId], (err3, users) => {
+                    db.all("SELECT id, name, email, role, read_only, created_at FROM users WHERE school_id=? AND role != 'SuperAdmin' ORDER BY name", [schoolId], (err3, users) => {
                         res.render("superAdmin/schoolDetail", { school, users: users || [], roles, error: message });
                     });
                 });
@@ -401,7 +401,7 @@ router.get("/schools/:id/users/edit/:userId", async (req, res) => {
         const allRoles = await capabilities.getAllRolesWithCapabilities();
 
         db.get(
-            "SELECT id, name, email, role, read_only FROM users WHERE id=? AND school_id=?",
+            "SELECT id, name, email, role, read_only FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'",
             [req.params.userId, req.params.id],
             async (err, user) => {
 
@@ -478,9 +478,9 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
     params.push(targetId, schoolId);
 
     db.run(
-        `UPDATE users SET ${setClauses.join(", ")} WHERE id=? AND school_id=?`,
+        `UPDATE users SET ${setClauses.join(", ")} WHERE id=? AND school_id=? AND role != 'SuperAdmin'`,
         params,
-        async (err) => {
+        async function (err) {
 
             if (err) {
                 const message = err.message.includes("UNIQUE")
@@ -488,6 +488,12 @@ router.post("/schools/:id/users/edit/:userId", async (req, res) => {
                     : err.message;
                 return res.render("superAdmin/editUser", { user: { id: targetId, name, email, role, read_only: readOnly }, schoolId, returnTo, roles: assignableRoles, secondaryChoices: [], secondaryRoleNames: [], error: message });
             }
+
+            // Nothing matched - the user doesn't exist in this school, or is
+            // a SuperAdmin account (never editable from a school's user form,
+            // since the role dropdown has no SuperAdmin option and saving it
+            // would silently demote them). Don't touch roles/branches/audit.
+            if (this.changes === 0) return res.redirect(returnTo);
 
             try {
                 await capabilities.setSecondaryRoles(targetId, secondaryRoleIds);
@@ -523,7 +529,7 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
     const targetId = req.params.userId;
 
     const target = await new Promise((resolve, reject) => {
-        db.get("SELECT name, email, role FROM users WHERE id=? AND school_id=?", [targetId, schoolId], (err, row) => err ? reject(err) : resolve(row));
+        db.get("SELECT name, email, role FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'", [targetId, schoolId], (err, row) => err ? reject(err) : resolve(row));
     });
 
     if (target && target.role === "Admin") {
@@ -535,7 +541,7 @@ router.get("/schools/:id/users/delete/:userId", async (req, res) => {
         }
     }
 
-    db.run("DELETE FROM users WHERE id=? AND school_id=?", [targetId, schoolId], async function (err) {
+    db.run("DELETE FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'", [targetId, schoolId], async function (err) {
 
         if (err) return res.send(err.message);
         if (this.changes > 0) await userBranches.deleteForUser(targetId).catch(() => {});

@@ -183,7 +183,7 @@ router.get("/users", requireLogin, requireRole("Admin"), async (req, res) => {
     try {
         const roles = await getAssignableRoleNames();
         db.all(
-            "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
+            "SELECT id, name, email, role, created_at FROM users WHERE school_id=? AND role != 'SuperAdmin' ORDER BY name",
             [req.schoolId],
             (err, users) => {
 
@@ -216,7 +216,7 @@ router.post("/users/add", requireLogin, requireRole("Admin"), async (req, res) =
                     : err.message;
 
                 return db.all(
-                    "SELECT id, name, email, role, created_at FROM users WHERE school_id=? ORDER BY name",
+                    "SELECT id, name, email, role, created_at FROM users WHERE school_id=? AND role != 'SuperAdmin' ORDER BY name",
                     [req.schoolId],
                     (err2, users) => res.render("auth/users", { users: users || [], roles, error: message })
                 );
@@ -240,7 +240,7 @@ router.get("/users/delete/:id", requireLogin, requireRole("Admin"), (req, res) =
     // Scope the delete to school_id too, so an admin can never delete a user
     // belonging to a different school even by guessing an id.
     db.run(
-        "DELETE FROM users WHERE id=? AND school_id=?",
+        "DELETE FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'",
         [req.params.id, req.schoolId],
         async function (err) {
 
@@ -265,7 +265,7 @@ router.get("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, re
     try {
         const roles = await getAssignableRoleNames();
         db.get(
-            "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
+            "SELECT id, name, email, role FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'",
             [req.params.id, req.schoolId],
             (err, user) => {
 
@@ -305,7 +305,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
         });
         if (targetIsCurrentlyAdmin === "Admin" && adminCount === 0) {
             return db.get(
-                "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
+                "SELECT id, name, email, role FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'",
                 [targetId, schoolId],
                 (err, user) => {
                     res.render("auth/editUser", {
@@ -331,7 +331,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
     params.push(targetId, schoolId);
 
     db.run(
-        `UPDATE users SET ${setClauses.join(", ")} WHERE id=? AND school_id=?`,
+        `UPDATE users SET ${setClauses.join(", ")} WHERE id=? AND school_id=? AND role != 'SuperAdmin'`,
         params,
         async function (err) {
 
@@ -340,7 +340,7 @@ router.post("/users/edit/:id", requireLogin, requireRole("Admin"), async (req, r
                     ? "That email is already registered to another user."
                     : err.message;
                 return db.get(
-                    "SELECT id, name, email, role FROM users WHERE id=? AND school_id=?",
+                    "SELECT id, name, email, role FROM users WHERE id=? AND school_id=? AND role != 'SuperAdmin'",
                     [targetId, schoolId],
                     (err2, user) => {
                         res.render("auth/editUser", { user: user || { id: targetId, name, email, role }, roles: assignableRoles, error: message });
