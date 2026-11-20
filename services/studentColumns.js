@@ -41,6 +41,7 @@ const STUDENT_COLUMNS = [
     { key: "batch_name", header: "Batch" },
     { key: "level_name", header: "Level" },
     { key: "branch_name", header: "Branch / Centre" },
+    { key: "date_of_joining", header: "Date of Joining (YYYY-MM-DD)" },
     { key: "total_hours_per_month", header: "Total Hours in Month" },
     { key: "fee_due_date", header: "Fee Due Date (YYYY-MM-DD)" },
     { key: "remarks", header: "Remarks" }

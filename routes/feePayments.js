@@ -639,10 +639,10 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
 
             let student;
             if (admissionNo) {
-                student = await feeDbGet("SELECT id, class_id FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))", [schoolId, admissionNo]);
+                student = await feeDbGet("SELECT id, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))", [schoolId, admissionNo]);
             }
             if (!student && studentName) {
-                const matches = await feeDbAll("SELECT id, class_id FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [schoolId, studentName]);
+                const matches = await feeDbAll("SELECT id, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [schoolId, studentName]);
                 if (matches.length === 1) student = matches[0];
                 else if (matches.length > 1) {
                     rowErrors.push(`Row ${rowNum} (${studentName}): more than one student has this name - add a Roll Number to this row to say which one.`);
@@ -654,22 +654,38 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
                 continue;
             }
 
-            // Fee Structure: matched by Fee Category + Academic Year, for
-            // this student's Class OR the school-wide (class_id IS NULL)
-            // fee item if no class-specific one exists - same lookup
-            // logic used when a Fee Category applies to every class.
-            const feeStructure = await feeDbGet(
-                `SELECT fee_structure.id FROM fee_structure
-                 JOIN fee_categories ON fee_structure.fee_category_id = fee_categories.id
-                 WHERE fee_structure.school_id=? AND LOWER(TRIM(fee_categories.fee_name))=LOWER(TRIM(?))
-                   AND fee_structure.academic_year=? AND (fee_structure.class_id=? OR fee_structure.class_id IS NULL)
-                 ORDER BY fee_structure.class_id IS NULL ASC LIMIT 1`,
-                [schoolId, feeName, academicYear, student.class_id]
+            // Fee Structure: matched by Fee Category + Academic Year, by
+            // LEVEL (not Class). Priority: this student's own fee items
+            // (per-student installment plans) -> their Level's items ->
+            // a school-wide item (no student/level/class). Academic Year
+            // accepts "2026-27" and "2026-2027" interchangeably.
+            const candidates = await feeDbAll(
+                `SELECT fs.id, fs.amount, fs.installment_label,
+                        CASE WHEN fs.student_id IS NOT NULL THEN 0 WHEN fs.level_id IS NOT NULL THEN 1 ELSE 2 END AS tier,
+                        COALESCE((SELECT SUM(p.amount_paid) FROM fee_payments p WHERE p.fee_structure_id = fs.id AND p.student_id = ?), 0) AS paid
+                 FROM fee_structure fs
+                 JOIN fee_categories fc ON fs.fee_category_id = fc.id
+                 WHERE fs.school_id=? AND LOWER(TRIM(fc.fee_name))=LOWER(TRIM(?))
+                   AND fs.academic_year IN (${academicYearVariants(academicYear).map(() => "?").join(",")})
+                   AND (fs.student_id = ?
+                        OR (fs.student_id IS NULL AND fs.level_id = ?)
+                        OR (fs.student_id IS NULL AND fs.level_id IS NULL AND fs.class_id IS NULL))
+                 ORDER BY tier, fs.id`,
+                [student.id, schoolId, feeName, ...academicYearVariants(academicYear), student.id, student.level_id]
             );
-            if (!feeStructure) {
-                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): no Fee Structure found for "${feeName}" / ${academicYear} matching this student's class.`);
+            if (!candidates.length) {
+                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): no Fee Structure found for "${feeName}" / ${academicYear} for this student or their Level.`);
                 continue;
             }
+            // Within the best tier, pick the installment for the payment's
+            // month (e.g. "November 2026"); otherwise the earliest one still
+            // owing; otherwise the first.
+            const tierRows = candidates.filter(c => c.tier === candidates[0].tier);
+            const monthLabel = installmentLabelForDate(paymentDate);
+            const feeStructure =
+                (monthLabel && tierRows.find(c => String(c.installment_label || "").trim().toLowerCase() === monthLabel.toLowerCase())) ||
+                tierRows.find(c => Number(c.paid) < Number(c.amount)) ||
+                tierRows[0];
 
             // Duplicate check - same student+fee+year+date+amount (and
             // receipt no. if the row gave one) already recorded.
@@ -708,6 +724,29 @@ function feeDbAll(sql, params) {
 }
 function feeDbRun(sql, params) {
     return new Promise((resolve, reject) => db.run(sql, params, function(err) { err ? reject(err) : resolve(this); }));
+}
+
+// "2026-2027", "2026-27", "2026/27" -> ["<as given>", "2026-27", "2026-2027"]
+function academicYearVariants(year) {
+    const raw = String(year || "").trim();
+    const out = new Set([raw]);
+    const m = raw.match(/^(\d{4})\s*[-\/]\s*(\d{2}|\d{4})$/);
+    if (m) {
+        const start = m[1];
+        const endFull = m[2].length === 4 ? m[2] : start.slice(0, 2) + m[2];
+        out.add(`${start}-${endFull.slice(2)}`);
+        out.add(`${start}-${endFull}`);
+    }
+    return [...out];
+}
+
+// "2026-11-20" -> "November 2026" (matches fee_structure.installment_label)
+function installmentLabelForDate(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-\d{2}/);
+    if (!m) return null;
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const idx = parseInt(m[2], 10) - 1;
+    return months[idx] ? `${months[idx]} ${m[1]}` : null;
 }
 
 module.exports = router;

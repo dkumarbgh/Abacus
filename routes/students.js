@@ -9,6 +9,35 @@ const { requireCapability } = require("../services/capabilities");
 const { logChange } = require("../services/auditLog");
 const { assignExplicitOrActivePlans } = require("../services/feePlanGenerator");
 
+// Accepts YYYY-MM-DD, DD-MM-YYYY or DD/MM/YYYY -> "YYYY-MM-DD"; "" stays "";
+// anything else unparseable -> null (caller reports a row error).
+function normalizeImportDate(value) {
+    const v = String(value || "").trim();
+    if (!v) return "";
+    let y, m, d, mt;
+    if ((mt = v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) { [, y, m, d] = mt; }
+    else if ((mt = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/))) { [, d, m, y] = mt; }
+    else return null;
+    const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dt = new Date(`${iso}T00:00:00Z`);
+    if (isNaN(dt.getTime()) || dt.toISOString().slice(0, 10) !== iso) return null;
+    return iso;
+}
+
+// After a student row is imported, create/sync their fee installments from
+// their Level's Fee Plan(s) - same as saving the Add/Edit Student form.
+// Uses the student's own chosen Fee Plan if they have one. A no-op when the
+// student has no Date of Joining or their Level has no plan.
+async function syncFeePlansAfterImport(studentId, schoolId, rowNum, name, rowErrors) {
+    try {
+        const s = await new Promise((resolve, reject) =>
+            db.get("SELECT fee_plan_id FROM students WHERE id=? AND school_id=?", [studentId, schoolId], (e, r) => e ? reject(e) : resolve(r)));
+        await assignExplicitOrActivePlans(studentId, schoolId, s ? s.fee_plan_id : null);
+    } catch (e) {
+        rowErrors.push(`Row ${rowNum} (${name}): saved, but fee installments couldn't be created - ${e.message}`);
+    }
+}
+
 const PAYMENT_MODE_LABELS = { monthly: "Monthly", bimonthly: "Bimonthly", quarterly: "Quarterly", half_yearly: "Half-Yearly" };
 
 function getFeePlansForDropdown(schoolId) {
@@ -246,7 +275,7 @@ router.get("/import/template", requireRole("Admin", "SuperAdmin"), async (req, r
     sheet.addRow({
         name: "Riya Sharma", admission_no: "2026/001", age: 15, gender: "Female",
         dob: "2011-04-12", class_name: "Class 8", guardian_name: "Suresh Sharma",
-        guardian_phone: "919876543210"
+        guardian_phone: "919876543210", date_of_joining: "2026-06-01"
     });
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -274,8 +303,8 @@ router.get("/import", requireRole("Admin", "SuperAdmin"), (req, res) => {
    structure, attendance, etc. all depend on it), so a typo there is
    reported as a row error instead of silently creating a bogus class.
    Mandatory-field settings are enforced per row, same as the manual form.
-   Total Fee / Discount / Installments are NOT handled by import - add
-   those individually from each student's Edit page after importing.
+   Fee installments ARE created from the student's Level Fee Plan(s) when
+   the row has a Date of Joining (same as saving Add/Edit Student).
 ===================================================== */
 router.post("/import", requireRole("Admin", "SuperAdmin"), uploadSpreadsheet.single("file"), async (req, res) => {
 
@@ -418,6 +447,14 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), uploadSpreadsheet.sin
             EXTENDED_FIELDS.forEach(key => { rowData[key] = cell(key); });
             const computedAge = computeAgeFromDob(rowData.dob);
             const age = computedAge != null ? computedAge : cell("age");
+            if (colIndexByKey.date_of_joining) {
+                const doj = normalizeImportDate(rowData.date_of_joining);
+                if (doj === null) {
+                    rowErrors.push(`Row ${rowNum} (${name}): Date of Joining "${rowData.date_of_joining}" isn't a valid date - use YYYY-MM-DD (e.g. 2026-06-01).`);
+                    continue;
+                }
+                rowData.date_of_joining = doj;
+            }
             rowData.age = age; // age isn't in EXTENDED_FIELDS (handled specially, like name/class_id) but IS a configurable mandatory field, so the validation loop below needs to see it too - DOB (if present in the sheet) always wins over a typed Age column
 
             // Class must already exist.
@@ -471,32 +508,41 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), uploadSpreadsheet.sin
                 // source of truth for every column it defines, including
                 // blanks (a blank cell clears that field, same as it would
                 // from the Edit Student form).
-                const setClauses = ["name=?", "age=?", "class_id=?", ...EXTENDED_FIELDS.map(f => `${f}=?`)];
-                const values = [name, age || null, classId, ...EXTENDED_FIELDS.map(f => rowData[f] || null), match.id, schoolId];
+                // Only overwrite fields whose column is actually in this
+                // sheet - otherwise a field the sheet doesn't carry (e.g.
+                // fee_plan_id, or Date of Joining in an older template)
+                // would be silently wiped to blank on every re-import.
+                const fieldsInSheet = EXTENDED_FIELDS.filter(f =>
+                    colIndexByKey[f] || (f.endsWith("_id") && colIndexByKey[f.replace(/_id$/, "_name")])
+                );
+                const setClauses = ["name=?", "age=?", "class_id=?", ...fieldsInSheet.map(f => `${f}=?`)];
+                const values = [name, age || null, classId, ...fieldsInSheet.map(f => rowData[f] || null), match.id, schoolId];
 
-                await new Promise((resolve) => {
+                const ok = await new Promise((resolve) => {
                     db.run(
                         `UPDATE students SET ${setClauses.join(",")} WHERE id=? AND school_id=?`,
                         values,
                         function(err) {
-                            if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(); }
+                            if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(false); }
                             updated++;
-                            resolve();
+                            resolve(true);
                         }
                     );
                 });
+                if (ok) await syncFeePlansAfterImport(match.id, schoolId, rowNum, name, rowErrors);
             } else {
                 const columns = ["name", "age", "class_id", ...EXTENDED_FIELDS, "school_id"];
                 const values = [name, age || null, classId, ...EXTENDED_FIELDS.map(f => rowData[f] || null), schoolId];
                 const placeholders = columns.map(() => "?").join(",");
 
-                await new Promise((resolve) => {
+                const newId = await new Promise((resolve) => {
                     db.run(`INSERT INTO students (${columns.join(",")}) VALUES(${placeholders})`, values, function(err) {
-                        if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(); }
+                        if (err) { rowErrors.push(`Row ${rowNum} (${name}): ${err.message}`); return resolve(null); }
                         imported++;
-                        resolve();
+                        resolve(this.lastID);
                     });
                 });
+                if (newId) await syncFeePlansAfterImport(newId, schoolId, rowNum, name, rowErrors);
             }
 
         }

@@ -212,14 +212,30 @@ function assignNextReceiptNo(schoolId) {
                     next = 1; // first receipt of a new calendar year - start the count over
                 }
 
-                const padded = String(next).padStart(digits, "0");
-                const assigned = format === "sequential" ? `${prefix}-${padded}` : `${prefix}-${currentYear}-${padded}`;
+                const build = (n) => {
+                    const padded = String(n).padStart(digits, "0");
+                    return format === "sequential" ? `${prefix}-${padded}` : `${prefix}-${currentYear}-${padded}`;
+                };
 
-                db.run(
-                    "UPDATE schools SET receipt_no_next=?, receipt_no_next_year=? WHERE id=?",
-                    [next + 1, currentYear, schoolId],
-                    (err2) => err2 ? reject(err2) : resolve(assigned)
-                );
+                // fee_payments.receipt_no is UNIQUE across ALL schools, but
+                // each school counts from its own receipt_no_next - so a
+                // second school using the same prefix (e.g. the default
+                // "RCPT") would collide with numbers another school already
+                // used, and the payment INSERT would fail. Skip forward past
+                // any number that's already taken anywhere.
+                const tryNumber = (n, attempts) => {
+                    const candidate = build(n);
+                    db.get("SELECT 1 FROM fee_payments WHERE receipt_no=? LIMIT 1", [candidate], (errC, taken) => {
+                        if (errC) return reject(errC);
+                        if (taken && attempts < 100000) return tryNumber(n + 1, attempts + 1);
+                        db.run(
+                            "UPDATE schools SET receipt_no_next=?, receipt_no_next_year=? WHERE id=?",
+                            [n + 1, currentYear, schoolId],
+                            (err2) => err2 ? reject(err2) : resolve(candidate)
+                        );
+                    });
+                };
+                tryNumber(next, 0);
             }
         );
     });
