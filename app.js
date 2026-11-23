@@ -25,6 +25,13 @@ const fs = require("fs");
 // install until someone visits Super Admin > Roles & Capabilities.
 ensureRolesSeeded().catch(err => console.error("Role/capability seeding error:", err));
 
+// Gives older fee-plan installments a due date (idempotent - only rows with
+// none). Waits for migrations so it never races the schema.
+db.ready
+    .then(() => require("./services/feePlanGenerator").backfillDueDates())
+    .then(n => { if (n) console.log(`Fee installments: added due dates to ${n} row(s).`); })
+    .catch(err => console.error("Due-date backfill error:", err));
+
 // Multer (file uploads) does NOT create its destination folder if it's
 // missing - the first upload would just crash with ENOENT. Rather than
 // relying on placeholder files surviving git/deployment, create every

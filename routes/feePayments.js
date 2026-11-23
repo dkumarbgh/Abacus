@@ -460,15 +460,19 @@ router.post("/discount", (req, res) => {
     const schoolId = req.schoolId;
 
     // Confirm the student and fee item both belong to this school AND that
-    // the fee item is actually one of this student's own class's fee items.
+    // the fee item applies to this student - the same rule as /pay and
+    // /mark-paid: a class-wide or Level-wide item, or one of the student's
+    // OWN installments (e.g. a fee-plan month). Fee-plan installments have no
+    // class/level, so discounts and waivers on them used to be refused (403).
     db.get(
         `SELECT students.id AS student_ok, fee_structure.id AS fs_ok
          FROM students, fee_structure
          WHERE students.id = ? AND students.school_id = ?
            AND fee_structure.id = ? AND fee_structure.school_id = ?
            AND (
-                fee_structure.class_id = students.class_id
-                OR fee_structure.level_id = students.level_id
+                (fee_structure.student_id IS NULL AND fee_structure.class_id = students.class_id)
+                OR (fee_structure.student_id IS NULL AND fee_structure.level_id = students.level_id)
+                OR fee_structure.student_id = students.id
            )`,
         [student_id, schoolId, fee_structure_id, schoolId],
         (checkErr, ok) => {
@@ -561,14 +565,13 @@ router.get("/discount/remove/:id", (req, res) => {
 =========================================== */
 
 /* ===========================================
-   IMPORT FEE PAYMENTS (Excel)
+   IMPORT FEE PAYMENTS (Excel or CSV)
    Unlike Student or Attendance import, this always INSERTS - a fee
-   payment is a historical financial record, not something that makes
-   sense to "update" by re-importing. To keep a re-uploaded file from
-   double-counting payments, a row is skipped as a likely duplicate if a
-   payment already exists for the same Student + Fee Category + Academic
-   Year + Date + Amount (Receipt No. is compared too when the row
-   provides one).
+   payment is a historical financial record. Safe to re-upload: a row is
+   skipped as already imported when the school already has a payment for
+   the same Student + Fee Category + Academic Year + Date + Amount
+   (+ Receipt No. when given) - regardless of which installment it landed
+   on. All rows are checked first, then saved in one transaction.
    Receipt Numbers: if the row includes one, it's kept as-is (useful when
    migrating historical numbers from a previous system); if blank, a new
    one is auto-assigned using this school's configured format (see
@@ -579,142 +582,262 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
     if (!req.file) return res.render("importFeePayments", { result: { error: "Please choose a file to upload." } });
 
     const schoolId = req.schoolId;
+    let sheet;
 
+    // ---- Read the file (.xlsx or .csv) ----
     try {
-
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(req.file.buffer);
-        const sheet = workbook.worksheets[0];
-
-        const headerRow = sheet.getRow(1);
-        const colIndexByHeader = {};
-        headerRow.eachCell((cell, colNumber) => {
-            const norm = String(cell.value || "").trim().toLowerCase();
-            const map = {
-                "roll number": "admission_no", "student name": "student_name", "fee category": "fee_name",
-                "academic year": "academic_year", "amount paid": "amount_paid", "payment date": "payment_date",
-                "mode": "mode", "reference no.": "reference_no", "receipt no.": "receipt_no", "remarks": "remarks"
-            };
-            if (map[norm]) colIndexByHeader[map[norm]] = colNumber;
-        });
-
-        const required = ["student_name", "fee_name", "academic_year", "amount_paid", "payment_date"];
-        if (required.some(k => !colIndexByHeader[k])) {
-            return res.render("importFeePayments", { result: { error: "The sheet is missing one or more required columns: Student Name, Fee Category, Academic Year, Amount Paid, Payment Date. Download the template to check the expected format." } });
+        if (req.file.originalname.toLowerCase().endsWith(".csv")) {
+            // Same temp-file route the Student import uses for CSV.
+            const os = require("os");
+            const fs = require("fs");
+            const path = require("path");
+            const tempPath = path.join(os.tmpdir(), `fee-import-${Date.now()}.csv`);
+            fs.writeFileSync(tempPath, req.file.buffer);
+            try { await workbook.csv.readFile(tempPath); } finally { fs.unlink(tempPath, () => {}); }
+        } else {
+            await workbook.xlsx.load(req.file.buffer);
         }
+        sheet = workbook.worksheets[0];
+    } catch (e) {
+        return res.render("importFeePayments", { result: { error: "Could not read that file. Please upload the .xlsx template (or a .csv with the same columns)." } });
+    }
+    if (!sheet || sheet.rowCount < 2) {
+        return res.render("importFeePayments", { result: { error: "That file doesn't have any data rows." } });
+    }
 
-        const cell = (row, key) => {
-            const idx = colIndexByHeader[key];
-            if (!idx) return "";
-            const v = row.getCell(idx).value;
-            if (v == null) return "";
-            if (v instanceof Date) return v.toISOString().slice(0, 10);
-            if (typeof v === "object" && v.text) return String(v.text).trim();
-            return String(v).trim();
+    const headerRow = sheet.getRow(1);
+    const colIndexByHeader = {};
+    headerRow.eachCell((c, colNumber) => {
+        const norm = String(c.value || "").trim().toLowerCase();
+        const map = {
+            "roll number": "admission_no", "student name": "student_name", "fee category": "fee_name",
+            "academic year": "academic_year", "amount paid": "amount_paid", "payment date": "payment_date",
+            "mode": "mode", "reference no.": "reference_no", "receipt no.": "receipt_no", "remarks": "remarks"
         };
+        if (map[norm]) colIndexByHeader[map[norm]] = colNumber;
+    });
 
-        const rowErrors = [];
-        let imported = 0;
-        let skippedDuplicates = 0;
+    const required = ["student_name", "fee_name", "academic_year", "amount_paid", "payment_date"];
+    if (required.some(k => !colIndexByHeader[k])) {
+        return res.render("importFeePayments", { result: { error: "The sheet is missing one or more required columns: Student Name, Fee Category, Academic Year, Amount Paid, Payment Date. Download the template to check the expected format." } });
+    }
 
-        for (let rowNum = 2; rowNum <= sheet.rowCount; rowNum++) {
-            const row = sheet.getRow(rowNum);
-            const studentName = cell(row, "student_name");
-            const admissionNo = cell(row, "admission_no");
-            const feeName = cell(row, "fee_name");
-            const academicYear = cell(row, "academic_year");
-            const amountPaid = parseFloat(cell(row, "amount_paid"));
-            const paymentDate = cell(row, "payment_date");
-            const mode = cell(row, "mode") || "Cash";
-            const referenceNo = cell(row, "reference_no");
-            const receiptNoGiven = cell(row, "receipt_no");
-            const remarks = cell(row, "remarks");
+    // Raw cell value, unwrapping formulas (their calculated result) and rich text.
+    const rawCell = (row, key) => {
+        const idx = colIndexByHeader[key];
+        if (!idx) return null;
+        let v = row.getCell(idx).value;
+        if (v && typeof v === "object" && !(v instanceof Date)) {
+            if ("result" in v) v = v.result;
+            else if (Array.isArray(v.richText)) v = v.richText.map(t => t.text).join("");
+            else if (v.text != null) v = v.text;
+        }
+        return v == null ? null : v;
+    };
+    const cell = (row, key) => {
+        const v = rawCell(row, key);
+        if (v == null) return "";
+        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        return String(v).trim();
+    };
 
-            if (!studentName && !admissionNo) continue; // skip fully blank rows
+    const today = new Date().toISOString().slice(0, 10);
+    const rowErrors = [];
 
-            if (!feeName || !academicYear || !paymentDate || !Number.isFinite(amountPaid) || amountPaid <= 0) {
-                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): missing or invalid Fee Category, Academic Year, Amount Paid, or Payment Date.`);
+    // ---- Phase 1: check every row; nothing is written yet ----
+    const valid = [];
+    for (let rowNum = 2; rowNum <= sheet.rowCount; rowNum++) {
+        const row = sheet.getRow(rowNum);
+        const studentName = cell(row, "student_name");
+        const admissionNo = cell(row, "admission_no");
+        if (!studentName && !admissionNo) continue; // skip fully blank rows
+        const who = studentName || admissionNo;
+
+        const feeName = cell(row, "fee_name");
+        const academicYear = cell(row, "academic_year");
+        const amountPaid = parseImportAmount(rawCell(row, "amount_paid"));
+        const paymentDate = parseImportDate(rawCell(row, "payment_date"));
+        const receiptNoGiven = cell(row, "receipt_no");
+
+        const problems = [];
+        if (!feeName) problems.push("Fee Category is empty");
+        if (!academicYear) problems.push("Academic Year is empty");
+        if (amountPaid == null) problems.push(`Amount Paid "${cell(row, "amount_paid")}" is not a number`);
+        else if (amountPaid <= 0) problems.push("Amount Paid must be more than zero");
+        if (!paymentDate) problems.push(`Payment Date "${cell(row, "payment_date")}" is not a valid date (use DD/MM/YYYY or YYYY-MM-DD)`);
+        else if (paymentDate > today) problems.push(`Payment Date ${paymentDate} is in the future`);
+        else if (paymentDate < "2000-01-01") problems.push(`Payment Date ${paymentDate} looks wrong`);
+        if (problems.length) { rowErrors.push(`Row ${rowNum} (${who}): ${problems.join("; ")}.`); continue; }
+
+        let student;
+        if (admissionNo) {
+            student = await feeDbGet("SELECT id, name, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))", [schoolId, admissionNo]);
+        }
+        if (!student && studentName) {
+            const matches = await feeDbAll("SELECT id, name, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [schoolId, studentName]);
+            if (matches.length === 1) student = matches[0];
+            else if (matches.length > 1) {
+                rowErrors.push(`Row ${rowNum} (${studentName}): more than one student has this name - add a Roll Number to this row to say which one.`);
                 continue;
             }
+        }
+        if (!student) { rowErrors.push(`Row ${rowNum} (${who}): no matching student found.`); continue; }
 
-            let student;
-            if (admissionNo) {
-                student = await feeDbGet("SELECT id, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))", [schoolId, admissionNo]);
-            }
-            if (!student && studentName) {
-                const matches = await feeDbAll("SELECT id, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [schoolId, studentName]);
-                if (matches.length === 1) student = matches[0];
-                else if (matches.length > 1) {
-                    rowErrors.push(`Row ${rowNum} (${studentName}): more than one student has this name - add a Roll Number to this row to say which one.`);
+        // Fee items this row can be paid against: this student's own
+        // installments -> their Level's items -> their Class's items (older
+        // setups) -> a school-wide item. "2026-27" and "2026-2027" both match.
+        const years = academicYearVariants(academicYear);
+        const candidates = await feeDbAll(
+            `SELECT fs.id, fs.amount, fs.installment_label, fs.due_date, fs.fee_category_id,
+                    CASE WHEN fs.student_id IS NOT NULL THEN 0 WHEN fs.level_id IS NOT NULL THEN 1
+                         WHEN fs.class_id IS NOT NULL THEN 2 ELSE 3 END AS tier
+             FROM fee_structure fs
+             JOIN fee_categories fc ON fs.fee_category_id = fc.id
+             WHERE fs.school_id=? AND LOWER(TRIM(fc.fee_name))=LOWER(TRIM(?))
+               AND fs.academic_year IN (${years.map(() => "?").join(",")})
+               AND (fs.student_id = ?
+                    OR (fs.student_id IS NULL AND fs.level_id IS NOT NULL AND fs.level_id = ?)
+                    OR (fs.student_id IS NULL AND fs.level_id IS NULL AND fs.class_id IS NOT NULL AND fs.class_id = ?)
+                    OR (fs.student_id IS NULL AND fs.level_id IS NULL AND fs.class_id IS NULL))
+             ORDER BY tier, COALESCE(fs.due_date, ''), fs.id`,
+            [schoolId, feeName, ...years, student.id, student.level_id, student.class_id]
+        );
+        if (!candidates.length) {
+            rowErrors.push(`Row ${rowNum} (${who}): no fee item found for "${feeName}" / ${academicYear} for this student, their Level or their Class.`);
+            continue;
+        }
+
+        valid.push({
+            rowNum, who, student, feeName, years,
+            feeCategoryIds: [...new Set(candidates.map(c => c.fee_category_id))],
+            tierRows: candidates.filter(c => c.tier === candidates[0].tier),
+            amountPaid, paymentDate,
+            mode: cell(row, "mode") || "Cash",
+            referenceNo: cell(row, "reference_no"),
+            receiptNoGiven,
+            remarks: cell(row, "remarks"),
+            // What makes two rows "the same payment" - deliberately NOT which
+            // installment it lands on, which can change between uploads.
+            sig: [student.id, feeName.toLowerCase(), years.slice().sort().join("|"), paymentDate, amountPaid, receiptNoGiven.toLowerCase()].join("~")
+        });
+    }
+
+    // Receipt numbers given in the file must be unique within the file.
+    const seenReceipts = new Map();
+    for (const v of valid) {
+        if (!v.receiptNoGiven) continue;
+        const key = v.receiptNoGiven.toLowerCase();
+        if (seenReceipts.has(key)) {
+            rowErrors.push(`Row ${v.rowNum} (${v.who}): Receipt No. ${v.receiptNoGiven} is also used on row ${seenReceipts.get(key)}.`);
+            v.skip = true;
+        } else seenReceipts.set(key, v.rowNum);
+    }
+
+    // ---- Phase 2: write everything in ONE transaction ----
+    // If anything unexpected fails, nothing from this file is saved - no more
+    // half-imported files.
+    let imported = 0, skippedDuplicates = 0;
+    try {
+        await feeDbRun("BEGIN IMMEDIATE", []);
+        const usedFromDb = new Map();   // sig -> existing payments already matched to rows of this file
+        const addedThisFile = new Map(); // sig -> payments this upload has inserted so far
+
+        for (const v of valid) {
+            if (v.skip) continue;
+
+            // Duplicate check by count: if the school already has N payments
+            // with the same student, fee, year, date and amount, the first N
+            // matching rows of this file are treated as already imported.
+            // Re-uploading a file therefore never adds anything twice, while
+            // two genuine identical payments in one file are both kept.
+            const existingCount = (await feeDbGet(
+                `SELECT COUNT(*) AS n FROM fee_payments p JOIN fee_structure fs ON fs.id = p.fee_structure_id
+                 WHERE p.school_id=? AND p.student_id=? AND p.payment_date=? AND p.amount_paid=?
+                   AND fs.fee_category_id IN (${v.feeCategoryIds.map(() => "?").join(",")})
+                   AND fs.academic_year IN (${v.years.map(() => "?").join(",")})
+                   ${v.receiptNoGiven ? "AND LOWER(p.receipt_no)=LOWER(?)" : ""}`,
+                [schoolId, v.student.id, v.paymentDate, v.amountPaid, ...v.feeCategoryIds, ...v.years,
+                    ...(v.receiptNoGiven ? [v.receiptNoGiven] : [])]
+            )).n;
+            // The count above also sees rows this upload already inserted (same
+            // transaction) - take those off so only payments that existed
+            // BEFORE this upload count as "already imported".
+            const priorCount = existingCount - (addedThisFile.get(v.sig) || 0);
+            const used = usedFromDb.get(v.sig) || 0;
+            if (used < priorCount) { usedFromDb.set(v.sig, used + 1); skippedDuplicates++; continue; }
+
+            // A given receipt number must not belong to any other payment
+            // (receipt numbers are unique across the whole system).
+            if (v.receiptNoGiven) {
+                const taken = await feeDbGet("SELECT id FROM fee_payments WHERE LOWER(receipt_no)=LOWER(?)", [v.receiptNoGiven]);
+                if (taken) {
+                    rowErrors.push(`Row ${v.rowNum} (${v.who}): Receipt No. ${v.receiptNoGiven} is already used by another payment - leave it blank to get a new number.`);
                     continue;
                 }
             }
-            if (!student) {
-                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): no matching student found.`);
-                continue;
+
+            // Pick the installment: the one for the payment's month if it
+            // still has something owing; otherwise the earliest one still
+            // owing; otherwise the payment's month; otherwise the first.
+            const owing = [];
+            for (const c of v.tierRows) {
+                const paid = (await feeDbGet("SELECT COALESCE(SUM(amount_paid),0) AS s FROM fee_payments WHERE fee_structure_id=? AND student_id=?", [c.id, v.student.id])).s;
+                const disc = await feeDbGet("SELECT discount_type, discount_value FROM fee_discounts WHERE fee_structure_id=? AND student_id=?", [c.id, v.student.id]);
+                const net = disc ? (disc.discount_type === "PERCENT" ? c.amount * (1 - disc.discount_value / 100) : Math.max(c.amount - disc.discount_value, 0)) : c.amount;
+                if (Number(paid) < Number(net)) owing.push(c);
             }
+            const monthLabel = (installmentLabelForDate(v.paymentDate) || "").toLowerCase();
+            const isMonth = c => String(c.installment_label || "").trim().toLowerCase() === monthLabel;
+            const feeStructure = owing.find(isMonth) || owing[0] || v.tierRows.find(isMonth) || v.tierRows[0];
 
-            // Fee Structure: matched by Fee Category + Academic Year, by
-            // LEVEL (not Class). Priority: this student's own fee items
-            // (per-student installment plans) -> their Level's items ->
-            // a school-wide item (no student/level/class). Academic Year
-            // accepts "2026-27" and "2026-2027" interchangeably.
-            const candidates = await feeDbAll(
-                `SELECT fs.id, fs.amount, fs.installment_label,
-                        CASE WHEN fs.student_id IS NOT NULL THEN 0 WHEN fs.level_id IS NOT NULL THEN 1 ELSE 2 END AS tier,
-                        COALESCE((SELECT SUM(p.amount_paid) FROM fee_payments p WHERE p.fee_structure_id = fs.id AND p.student_id = ?), 0) AS paid
-                 FROM fee_structure fs
-                 JOIN fee_categories fc ON fs.fee_category_id = fc.id
-                 WHERE fs.school_id=? AND LOWER(TRIM(fc.fee_name))=LOWER(TRIM(?))
-                   AND fs.academic_year IN (${academicYearVariants(academicYear).map(() => "?").join(",")})
-                   AND (fs.student_id = ?
-                        OR (fs.student_id IS NULL AND fs.level_id = ?)
-                        OR (fs.student_id IS NULL AND fs.level_id IS NULL AND fs.class_id IS NULL))
-                 ORDER BY tier, fs.id`,
-                [student.id, schoolId, feeName, ...academicYearVariants(academicYear), student.id, student.level_id]
-            );
-            if (!candidates.length) {
-                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): no Fee Structure found for "${feeName}" / ${academicYear} for this student or their Level.`);
-                continue;
-            }
-            // Within the best tier, pick the installment for the payment's
-            // month (e.g. "November 2026"); otherwise the earliest one still
-            // owing; otherwise the first.
-            const tierRows = candidates.filter(c => c.tier === candidates[0].tier);
-            const monthLabel = installmentLabelForDate(paymentDate);
-            const feeStructure =
-                (monthLabel && tierRows.find(c => String(c.installment_label || "").trim().toLowerCase() === monthLabel.toLowerCase())) ||
-                tierRows.find(c => Number(c.paid) < Number(c.amount)) ||
-                tierRows[0];
-
-            // Duplicate check - same student+fee+year+date+amount (and
-            // receipt no. if the row gave one) already recorded.
-            const dupe = await feeDbGet(
-                `SELECT id FROM fee_payments WHERE school_id=? AND student_id=? AND fee_structure_id=? AND payment_date=? AND amount_paid=?
-                 ${receiptNoGiven ? "AND receipt_no=?" : ""}`,
-                receiptNoGiven
-                    ? [schoolId, student.id, feeStructure.id, paymentDate, amountPaid, receiptNoGiven]
-                    : [schoolId, student.id, feeStructure.id, paymentDate, amountPaid]
-            );
-            if (dupe) { skippedDuplicates++; continue; }
-
-            const receiptNo = receiptNoGiven || await assignNextReceiptNo(schoolId);
-
+            const receiptNo = v.receiptNoGiven || await assignNextReceiptNo(schoolId);
             await feeDbRun(
                 `INSERT INTO fee_payments (student_id, fee_structure_id, amount_paid, payment_date, mode, reference_no, receipt_no, remarks, school_id)
                  VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student.id, feeStructure.id, amountPaid, paymentDate, mode, referenceNo || null, receiptNo, remarks || null, schoolId]
+                [v.student.id, feeStructure.id, v.amountPaid, v.paymentDate, v.mode, v.referenceNo || null, receiptNo, v.remarks || null, schoolId]
             );
+            addedThisFile.set(v.sig, (addedThisFile.get(v.sig) || 0) + 1);
             imported++;
         }
 
-        res.render("importFeePayments", { result: { imported, skippedDuplicates, rowErrors, total: sheet.rowCount - 1 } });
-
+        await feeDbRun("COMMIT", []);
     } catch (e) {
-        res.render("importFeePayments", { result: { error: "Could not read that file: " + e.message } });
+        await feeDbRun("ROLLBACK", []).catch(() => {});
+        return res.render("importFeePayments", { result: {
+            error: `Nothing was imported - the file was stopped part-way by an unexpected error, so all of its rows were undone. Please fix the file and upload it again. (${e.message})`
+        } });
     }
 
+    res.render("importFeePayments", { result: { imported, skippedDuplicates, rowErrors, total: sheet.rowCount - 1 } });
+
 });
+
+// Amount cell -> number, or null if it isn't one. Accepts 1600, "1600",
+// "1,600", "1,600.50", "Rs 800", "Rs. 800", "INR 800", "₹800".
+function parseImportAmount(value) {
+    if (value == null || value === "") return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    const cleaned = String(value).trim().replace(/^(₹|rs\.?|inr)\s*/i, "").replace(/,/g, "").trim();
+    if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+    return parseFloat(cleaned);
+}
+
+// Date cell -> "YYYY-MM-DD", or null if it isn't a real date. Accepts real
+// Excel dates, YYYY-MM-DD, and day-first DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY.
+function parseImportDate(value) {
+    if (value == null || value === "") return null;
+    if (value instanceof Date) return isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+    const v = String(value).trim();
+    let y, m, d, mt;
+    if ((mt = v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) { [, y, m, d] = mt; }
+    else if ((mt = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/))) { [, d, m, y] = mt; }
+    else return null;
+    const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dt = new Date(`${iso}T00:00:00Z`);
+    if (isNaN(dt.getTime()) || dt.toISOString().slice(0, 10) !== iso) return null;
+    return iso;
+}
 
 function feeDbGet(sql, params) {
     return new Promise((resolve, reject) => db.get(sql, params, (err, row) => err ? reject(err) : resolve(row)));

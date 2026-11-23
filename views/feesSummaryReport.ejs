@@ -83,6 +83,7 @@
             <select name="status" class="form-select" onchange="this.form.submit()">
                 <option value="">All Statuses</option>
                 <option value="Paid" <%= status==='Paid' ? 'selected' : '' %>>Fully Paid</option>
+                <option value="UpToDate" <%= status==='UpToDate' ? 'selected' : '' %>>Up to date (nothing due yet)</option>
                 <option value="Partial" <%= status==='Partial' ? 'selected' : '' %>>Partially Paid</option>
                 <option value="Unpaid" <%= status==='Unpaid' ? 'selected' : '' %>>Unpaid</option>
             </select>
@@ -97,22 +98,28 @@
 
 <% if (!simpleFeeMode) { %>
 <div class="row mb-3">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm"><div class="card-body text-center">
             <div class="text-muted small">Total Fee (this filter)</div>
             <div class="fs-4">₹<%= grandTotalFee %></div>
         </div></div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm border-success"><div class="card-body text-center">
             <div class="text-muted small">Total Collected</div>
             <div class="fs-4 text-success">₹<%= grandTotalPaid %></div>
         </div></div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm border-danger"><div class="card-body text-center">
-            <div class="text-muted small">Total Outstanding</div>
-            <div class="fs-4 text-danger">₹<%= grandTotalDue %></div>
+            <div class="text-muted small">Balance (full year)</div>
+            <div class="fs-4">₹<%= grandTotalDue %></div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-danger"><div class="card-body text-center">
+            <div class="text-muted small">Due as of today</div>
+            <div class="fs-4 text-danger">₹<%= grandDueNow %></div>
         </div></div>
     </div>
 </div>
@@ -122,13 +129,13 @@
     <thead class="table-dark">
         <tr>
             <th>Student</th><th>Batch</th><th>Level</th><th>Standard/Class</th>
-            <% if (!simpleFeeMode) { %><th>Total Fee</th><th>Paid</th><th>Due</th><% } %>
+            <% if (!simpleFeeMode) { %><th>Total Fee</th><th>Paid</th><th>Balance (full year)</th><th>Due Now</th><% } %>
             <th>Status</th>
         </tr>
     </thead>
     <tbody>
         <% if (rows.length === 0) { %>
-            <tr><td colspan="<%= simpleFeeMode ? 5 : 8 %>" class="text-center">No students match these filters.</td></tr>
+            <tr><td colspan="<%= simpleFeeMode ? 5 : 9 %>" class="text-center">No students match these filters.</td></tr>
         <% } %>
         <% rows.forEach(r => { %>
             <% const lvl = levels.find(l => String(l.id)===String(r.student.level_id)); %>
@@ -143,10 +150,13 @@
                     <td>₹<%= r.totalFee %></td>
                     <td>₹<%= r.totalPaid %></td>
                     <td><%= r.totalDue > 0 ? "₹" + r.totalDue : "-" %></td>
+                    <td><%= r.dueNow > 0 ? "₹" + r.dueNow : "-" %></td>
                 <% } %>
                 <td>
                     <% if (r.feeStatus === 'Paid') { %>
                         <span class="badge bg-success">Fully Paid</span>
+                    <% } else if (r.feeStatus === 'UpToDate') { %>
+                        <span class="badge bg-info text-dark">Up to date</span>
                     <% } else if (r.feeStatus === 'Partial') { %>
                         <span class="badge bg-warning text-dark">Partially Paid</span>
                     <% } else { %>

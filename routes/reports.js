@@ -659,7 +659,10 @@ function computeDuesByClass(schoolId, classId, callback) {
                                     // periods show their real individual due dates. Older class/level-
                                     // wide items never set fs.due_date, so they fall back to the
                                     // student's own single fee_due_date record exactly as before.
-                                    due_date: fs.due_date || student.fee_due_date || null,
+                                    // Last fallback: the student's Date of Joining - a one-time item
+                                    // (e.g. a Level-wide Book Kit fee) is owed from the day they join,
+                                    // and without SOME date it silently vanished from Fees Due.
+                                    due_date: fs.due_date || student.fee_due_date || student.date_of_joining || null,
                                     paid,
                                     paidDate,
                                     discount,
@@ -669,9 +672,26 @@ function computeDuesByClass(schoolId, classId, callback) {
                                 };
                             });
 
-                            const totalDue = feeItems.reduce((sum, f) => sum + f.due, 0);
+                            // Money paid ABOVE an item's amount (e.g. two months paid against
+                            // one installment) used to be lost - Total/Paid/Due stopped adding
+                            // up. Carry that excess forward against the student's other dues,
+                            // earliest first, so it counts as an advance.
+                            const excess = feeItems.reduce((sum, f) => sum + Math.max(f.paid - f.netAmount, 0), 0);
+                            const totalDue = Math.max(feeItems.reduce((sum, f) => sum + f.due, 0) - excess, 0);
 
-                            return { student, feeItems, totalDue };
+                            // "Due now" = only items whose due date has arrived. A fee plan
+                            // generates a full year of monthly installments up front, so the
+                            // full-year balance (totalDue) is NOT what the parent owes today -
+                            // showing it as "pending" made a fully up-to-date student look
+                            // like they owed the rest of the year. Items with no date at all
+                            // count as due now.
+                            const today = new Date().toISOString().slice(0, 10);
+                            const dueNowRaw = feeItems
+                                .filter(f => !f.due_date || f.due_date <= today)
+                                .reduce((sum, f) => sum + f.due, 0);
+                            const dueNow = Math.max(dueNowRaw - excess, 0);
+
+                            return { student, feeItems, totalDue, dueNow };
 
                         });
 
@@ -773,18 +793,23 @@ router.get("/fees-due", (req, res) => {
 router.get("/fees-pending", (req, res) => {
 
     const { batch_id, level_id, class_id, branch_id, student_name } = req.query;
+    // By default show only what is due NOW (installments whose due date has
+    // arrived); "include_future=1" switches back to the full-year balance.
+    const includeFuture = req.query.include_future === "1";
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
 
         if (err) return res.send(err.message);
 
+        results.forEach(r => { r.shownDue = includeFuture ? r.totalDue : r.dueNow; });
+
         // Batch, Level, Class(Standard) and Branch/Centre filters are applied
         // here, after computeDuesByClass, rather than passed into the helper -
         // computeDuesByClass is shared by Fees Due, Fees Pending, and the
         // Student Report, so narrowing it down here keeps that shared helper's
         // signature untouched.
-        let pending = results.filter(r => r.totalDue > 0);
+        let pending = results.filter(r => r.shownDue > 0);
         if (batch_id) { pending = pending.filter(r => String(r.student.batch_id) === String(batch_id)); }
         if (level_id) { pending = pending.filter(r => String(r.student.level_id) === String(level_id)); }
         if (class_id) { pending = pending.filter(r => String(r.student.class_id) === String(class_id)); }
@@ -804,6 +829,7 @@ router.get("/fees-pending", (req, res) => {
             getSimpleFeeMode(schoolId)
                 .then(simpleFeeMode => res.render("feesPendingReport", {
                     pending, batches, levels, branches, classes,
+                    include_future: includeFuture ? "1" : "",
                     batch_id: batch_id || "", level_id: level_id || "",
                     class_id: class_id || "", branch_id: branch_id || "",
                     student_name: student_name || "",
@@ -820,13 +846,17 @@ router.get("/fees-pending", (req, res) => {
 router.post("/fees-pending/remind", (req, res) => {
 
     const { batch_id, level_id, class_id, branch_id, student_name } = req.body;
+    const includeFuture = req.body.include_future === "1";
     const schoolId = req.schoolId;
 
     computeDuesByClass(schoolId, null, (err, results) => {
 
         if (err) return res.send(err.message);
 
-        let pending = results.filter(r => r.totalDue > 0 && (r.student.guardian_phone || r.student.guardian_phone_2));
+        // Same "due now unless include_future" rule as the page, so a parent is
+        // never asked for months that haven't started yet.
+        results.forEach(r => { r.shownDue = includeFuture ? r.totalDue : r.dueNow; });
+        let pending = results.filter(r => r.shownDue > 0 && (r.student.guardian_phone || r.student.guardian_phone_2));
         // Same post-filter as the GET route, so "remind all below" only
         // messages the guardians actually shown on the filtered page.
         if (batch_id) { pending = pending.filter(r => String(r.student.batch_id) === String(batch_id)); }
@@ -847,7 +877,7 @@ router.post("/fees-pending/remind", (req, res) => {
                 schoolId,
                 message: simpleFeeMode
                     ? `Dear Parent, school fees are still pending for ${r.student.name}. Kindly clear the dues at the earliest. - School Office`
-                    : `Dear Parent, a total of Rs.${r.totalDue} in school fees is pending for ${r.student.name}. Kindly clear the dues at the earliest. - School Office`
+                    : `Dear Parent, a total of Rs.${r.shownDue} in school fees is pending for ${r.student.name}. Kindly clear the dues at the earliest. - School Office`
             }));
 
             const qs = new URLSearchParams();
@@ -856,6 +886,7 @@ router.post("/fees-pending/remind", (req, res) => {
             if (class_id) qs.set("class_id", class_id);
             if (branch_id) qs.set("branch_id", branch_id);
             if (student_name) qs.set("student_name", student_name);
+            if (includeFuture) qs.set("include_future", "1");
             const qsStr = qs.toString();
             res.redirect(`/reports/fees-pending${qsStr ? "?" + qsStr : ""}`);
             sendBulk(recipients, 3000);
@@ -897,8 +928,13 @@ router.get("/fees-summary", (req, res) => {
             const totalFee = r.feeItems.reduce((sum, f) => sum + f.netAmount, 0);
             const totalPaid = r.feeItems.reduce((sum, f) => sum + f.paid, 0);
             const totalDue = r.totalDue;
-            const feeStatus = totalDue <= 0 ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid");
-            return { student: r.student, totalFee, totalPaid, totalDue, feeStatus };
+            const dueNow = r.dueNow;
+            // "Up to date" = nothing due yet, though later installments of the
+            // year are still to come - previously these students showed as
+            // "Partially Paid" with the whole year as Due, which looked wrong.
+            const feeStatus = totalDue <= 0 ? "Paid"
+                : (dueNow <= 0 ? "UpToDate" : (totalPaid > 0 ? "Partial" : "Unpaid"));
+            return { student: r.student, totalFee, totalPaid, totalDue, dueNow, feeStatus };
         });
 
         const filtered = status ? summarized.filter(r => r.feeStatus === status) : summarized;
@@ -907,6 +943,7 @@ router.get("/fees-summary", (req, res) => {
         const grandTotalFee = filtered.reduce((sum, r) => sum + r.totalFee, 0);
         const grandTotalPaid = filtered.reduce((sum, r) => sum + r.totalPaid, 0);
         const grandTotalDue = filtered.reduce((sum, r) => sum + r.totalDue, 0);
+        const grandDueNow = filtered.reduce((sum, r) => sum + r.dueNow, 0);
 
         Promise.all([
             dbAll("SELECT * FROM lookup_items WHERE school_id=? AND list_type='batch' ORDER BY name", [schoolId]),
@@ -918,7 +955,7 @@ router.get("/fees-summary", (req, res) => {
             getSimpleFeeMode(schoolId)
                 .then(simpleFeeMode => res.render("feesSummaryReport", {
                     rows: filtered, batches, levels, branches, classes,
-                    grandTotalFee, grandTotalPaid, grandTotalDue,
+                    grandTotalFee, grandTotalPaid, grandTotalDue, grandDueNow,
                     batch_id: batch_id || "", level_id: level_id || "",
                     class_id: class_id || "", branch_id: branch_id || "", status: status || "",
                     student_name: student_name || "",

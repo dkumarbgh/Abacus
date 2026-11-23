@@ -314,7 +314,7 @@
                                             Sync Students' Fee Periods
                                         </a>
                                         <a href="/fee-structure/plans/<%= p.id %>/delete" class="btn btn-danger btn-sm"
-                                           onclick="return confirm('Delete this Fee Plan? Already-generated student fee periods are kept - only future auto-assignment stops.')">Delete Plan</a>
+                                           onclick="return confirm('Delete this Fee Plan? Its unpaid student installments will be removed too. Installments that already have a payment or discount are kept.')">Delete Plan</a>
                                     </td>
                                 </tr>
                             <% }) %>

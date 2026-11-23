@@ -389,10 +389,12 @@ router.get("/plans/:id/assign-missing", async (req, res) => {
 
 });
 
-// Delete a Fee Plan - only removes the PLAN (the "rate" record) itself,
-// never any already-generated per-student fee_structure rows, so past
-// dues, payments, and discounts stay exactly as they were. New students
-// just won't get periods auto-generated from this plan going forward.
+// Delete a Fee Plan. Also removes the installments it generated that have
+// NO payment and NO discount - previously every generated installment was
+// kept, so a plan deleted to correct a mistake (e.g. a one-time Book Kit
+// fee set up as monthly) kept charging every student for the whole year.
+// Installments with money recorded against them are never deleted, so
+// collected fees and receipts are untouched.
 router.get("/plans/:id/delete", async (req, res) => {
 
     const schoolId = req.schoolId;
@@ -408,14 +410,32 @@ router.get("/plans/:id/delete", async (req, res) => {
             );
         });
 
-        await new Promise((resolve, reject) => {
-            db.run("DELETE FROM fee_plans WHERE id=? AND school_id=?", [req.params.id, schoolId], (err) => err ? reject(err) : resolve());
-        });
+        if (!plan) return res.send("Fee Plan not found");
+
+        const run = (sql, params) => new Promise((resolve, reject) =>
+            db.run(sql, params, function (err) { err ? reject(err) : resolve(this); }));
+        const get = (sql, params) => new Promise((resolve, reject) =>
+            db.get(sql, params, (err, row) => err ? reject(err) : resolve(row)));
+
+        const kept = await get(
+            `SELECT COUNT(*) AS n FROM fee_structure fs
+             WHERE fs.fee_plan_id=? AND fs.school_id=?
+               AND (EXISTS (SELECT 1 FROM fee_payments p WHERE p.fee_structure_id = fs.id)
+                 OR EXISTS (SELECT 1 FROM fee_discounts d WHERE d.fee_structure_id = fs.id))`,
+            [plan.id, schoolId]);
+        const removed = await run(
+            `DELETE FROM fee_structure
+             WHERE fee_plan_id=? AND school_id=?
+               AND NOT EXISTS (SELECT 1 FROM fee_payments p WHERE p.fee_structure_id = fee_structure.id)
+               AND NOT EXISTS (SELECT 1 FROM fee_discounts d WHERE d.fee_structure_id = fee_structure.id)
+               AND NOT EXISTS (SELECT 1 FROM exams e WHERE e.fee_structure_id = fee_structure.id)`,
+            [plan.id, schoolId]);
+        await run("DELETE FROM fee_plans WHERE id=? AND school_id=?", [plan.id, schoolId]);
 
         logChange({
             schoolId, branchId: null, req,
-            entityType: "Fee Plan", entityName: plan ? plan.fee_name : `#${req.params.id}`, action: "Deleted",
-            details: "Already-generated student fee periods were kept - only the plan/rate itself was removed."
+            entityType: "Fee Plan", entityName: plan.fee_name, action: "Deleted",
+            details: `Removed ${removed.changes} unpaid student installment(s); kept ${kept.n} installment(s) that have a payment or discount.`
         });
 
         res.redirect("/fee-structure");

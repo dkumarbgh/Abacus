@@ -166,7 +166,10 @@
                         </tbody>
                     </table>
                 <% } else { %>
-                    <p>Total Outstanding: <b>₹<%= feeInfo.totalDue %></b></p>
+                    <p>
+                        Due as of today: <b class="text-danger">₹<%= feeInfo.dueNow || 0 %></b>
+                        &nbsp;|&nbsp; Balance for the full year: <b>₹<%= feeInfo.totalDue %></b>
+                    </p>
                     <table class="table table-sm table-bordered">
                         <thead><tr><th>Fee</th><th>Amount</th><th>Discount</th><th>Paid</th><th>Due</th><th>Due Date</th><th>Paid Date</th></tr></thead>
                         <tbody>
