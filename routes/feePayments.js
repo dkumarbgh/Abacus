@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { withTransaction } = require("../services/dbTransaction");
 const db = require("../config/database");
 const multer = require("multer");
 const ExcelJS = require("exceljs");
@@ -739,7 +740,7 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
     // half-imported files.
     let imported = 0, skippedDuplicates = 0;
     try {
-        await feeDbRun("BEGIN IMMEDIATE", []);
+      await withTransaction(async () => {
         const usedFromDb = new Map();   // sig -> existing payments already matched to rows of this file
         const addedThisFile = new Map(); // sig -> payments this upload has inserted so far
 
@@ -800,10 +801,9 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
             addedThisFile.set(v.sig, (addedThisFile.get(v.sig) || 0) + 1);
             imported++;
         }
-
-        await feeDbRun("COMMIT", []);
+      });
     } catch (e) {
-        await feeDbRun("ROLLBACK", []).catch(() => {});
+        imported = 0; skippedDuplicates = 0;
         return res.render("importFeePayments", { result: {
             error: `Nothing was imported - the file was stopped part-way by an unexpected error, so all of its rows were undone. Please fix the file and upload it again. (${e.message})`
         } });

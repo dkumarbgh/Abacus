@@ -149,18 +149,29 @@ router.post("/edit/:id", (req, res) => {
 =========================================== */
 router.get("/delete/:id", (req, res) => {
 
-    db.run(
-        "DELETE FROM teachers WHERE id=? AND school_id=?",
-        [req.params.id, req.schoolId],
-        function(err) {
+    // Also remove the teacher's subject assignments and timetable entries -
+    // previously they were left behind pointing at a teacher who no longer
+    // exists. Only this school's rows are touched.
+    const teacherId = req.params.id;
+    const schoolId = req.schoolId;
 
-            if (err) {
-                return res.send(err.message);
-            }
+    db.get("SELECT id FROM teachers WHERE id=? AND school_id=?", [teacherId, schoolId], (errT, teacher) => {
 
-            res.redirect("/teachers");
+        if (errT) return res.send(errT.message);
+        if (!teacher) return res.redirect("/teachers");
 
+        db.run("DELETE FROM timetable WHERE teacher_id=? AND school_id=?", [teacherId, schoolId], (err1) => {
+            if (err1) return res.send(err1.message);
+            db.run("DELETE FROM teacher_subjects WHERE teacher_id=? AND school_id=?", [teacherId, schoolId], (err2) => {
+                if (err2) return res.send(err2.message);
+                db.run("DELETE FROM teachers WHERE id=? AND school_id=?", [teacherId, schoolId], (err3) => {
+                    if (err3) return res.send(err3.message);
+                    res.redirect("/teachers");
+                });
+            });
         });
+
+    });
 
 });
 

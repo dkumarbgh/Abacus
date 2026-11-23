@@ -121,7 +121,32 @@ router.get("/", (req, res) => {
 });
 
 // Save Fee Structure
-router.post("/add", (req, res) => {
+router.post("/add", (req, res, next) => {
+
+    // Warn before adding a Level-wide item for a fee that a Fee Plan already
+    // charges on the same Level and year - every student on the plan would be
+    // billed twice (this is how one school ended up with Book Kit charged
+    // both monthly and as a one-time fee).
+    if (req.body.confirm_duplicate === "1" || !req.body.level_id) return next();
+    const years = feeYearVariants(req.body.academic_year);
+    db.all(
+        `SELECT fp.*, fc.fee_name, lv.name AS level_name FROM fee_plans fp
+         JOIN fee_categories fc ON fc.id = fp.fee_category_id
+         LEFT JOIN lookup_items lv ON lv.id = fp.level_id
+         WHERE fp.school_id=? AND fp.level_id=? AND fp.fee_category_id=?
+           AND fp.academic_year IN (${years.map(() => "?").join(",")})`,
+        [req.schoolId, req.body.level_id, req.body.fee_category_id, ...years],
+        (err, plans) => {
+            if (err || !plans || !plans.length) return next();
+            res.render("fees/confirmDuplicateFee", {
+                plans, feeName: plans[0].fee_name, levelName: plans[0].level_name || "This Level",
+                levelId: req.body.level_id, feeCategoryId: req.body.fee_category_id,
+                academicYear: req.body.academic_year, amount: req.body.amount
+            });
+        }
+    );
+
+}, (req, res) => {
 
     const {
         level_id,
@@ -445,5 +470,19 @@ router.get("/plans/:id/delete", async (req, res) => {
     }
 
 });
+
+// "2026-27" / "2026-2027" -> both spellings, so a plan and an item for the
+// same year match however each was typed.
+function feeYearVariants(year) {
+    const raw = String(year || "").trim();
+    const out = new Set([raw]);
+    const m = raw.match(/^(\d{4})\s*[-\/]\s*(\d{2}|\d{4})$/);
+    if (m) {
+        const endFull = m[2].length === 4 ? m[2] : m[1].slice(0, 2) + m[2];
+        out.add(`${m[1]}-${endFull.slice(2)}`);
+        out.add(`${m[1]}-${endFull}`);
+    }
+    return [...out];
+}
 
 module.exports = router;

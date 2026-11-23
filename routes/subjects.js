@@ -49,6 +49,18 @@ router.get("/add", (req, res) => {
 /* ===========================================
    Save Subject
 =========================================== */
+// A duplicate Subject Code used to show the raw database error
+// ("SQLITE_CONSTRAINT: UNIQUE constraint failed ...") - say it plainly instead.
+function subjectSaveError(res, err, code) {
+    if (/UNIQUE/i.test(err.message)) {
+        return res.status(400).send(
+            `<h4>The subject code "${String(code || "").replace(/[<>&"]/g, "")}" is already used by another subject. Please choose a different code.</h4>` +
+            `<a href="/subjects">Back to Subjects</a>`
+        );
+    }
+    return res.send(err.message);
+}
+
 router.post("/add", (req, res) => {
 
     const {
@@ -65,7 +77,7 @@ router.post("/add", (req, res) => {
         function(err) {
 
             if (err) {
-                return res.send(err.message);
+                return subjectSaveError(res, err, (req.body || {}).subject_code);
             }
 
             res.redirect("/subjects");
@@ -126,7 +138,7 @@ router.post("/edit/:id", (req, res) => {
         function(err) {
 
             if (err) {
-                return res.send(err.message);
+                return subjectSaveError(res, err, (req.body || {}).subject_code);
             }
 
             res.redirect("/subjects");
@@ -147,7 +159,7 @@ router.get("/delete/:id", (req, res) => {
         function(err) {
 
             if (err) {
-                return res.send(err.message);
+                return subjectSaveError(res, err, (req.body || {}).subject_code);
             }
 
             res.redirect("/subjects");

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { withTransaction } = require("../services/dbTransaction");
 const db = require("../config/database");
 const multer = require("multer");
 const path = require("path");
@@ -538,15 +539,32 @@ router.get("/import/template", requireRole("Admin", "SuperAdmin"), requireSchool
 
 /* ===========================================
    IMPORT ATTENDANCE (Excel)
-   Rows are grouped by (Batch, Date) and applied with the SAME
-   delete-then-reinsert semantics as the normal Save Attendance flow
-   (see /save above) - one full re-import of a (Batch, Date) group
-   replaces whatever was there before for that batch+date, rather than
-   piling up duplicate rows on a re-import of the same file.
+   Each row REPLACES that student's record for that Batch + Date, so
+   re-importing the same file never piles up duplicates. Only students
+   listed in the file are touched - a small correction file for a few
+   students no longer wipes everyone else's attendance for that day
+   (it used to delete the whole batch+date first). All rows are checked
+   first, then saved in one transaction.
    "Status" of Absent is honored for the home batch; any row whose Batch
    doesn't match a student's own batch_id is treated as a cross-batch
    (makeup-class) entry, same as the manual "add from a different batch" flow.
 =========================================== */
+// Date cell -> "YYYY-MM-DD", or null. Accepts real Excel dates,
+// YYYY-MM-DD and day-first DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY.
+function parseAttendanceDate(value) {
+    if (value == null || value === "") return null;
+    if (value instanceof Date) return isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+    const v = String(value).trim();
+    let y, m, d, mt;
+    if ((mt = v.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) { [, y, m, d] = mt; }
+    else if ((mt = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/))) { [, d, m, y] = mt; }
+    else return null;
+    const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dt = new Date(`${iso}T00:00:00Z`);
+    if (isNaN(dt.getTime()) || dt.toISOString().slice(0, 10) !== iso) return null;
+    return iso;
+}
+
 router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature("attendance_import_export_enabled", "Attendance Import/Export"), uploadSpreadsheet.single("file"), async (req, res) => {
 
     if (!req.file) return res.render("importAttendance", { result: { error: "Please choose a file to upload." } });
@@ -574,15 +592,24 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
             return res.render("importAttendance", { result: { error: "The sheet is missing one or more required columns: Student Name, Batch, Date. Download the template to check the expected format." } });
         }
 
-        const cell = (row, key) => {
+        const rawCell = (row, key) => {
             const idx = colIndexByHeader[key];
-            if (!idx) return "";
-            const v = row.getCell(idx).value;
+            if (!idx) return null;
+            let v = row.getCell(idx).value;
+            if (v && typeof v === "object" && !(v instanceof Date)) {
+                if ("result" in v) v = v.result;
+                else if (Array.isArray(v.richText)) v = v.richText.map(t => t.text).join("");
+                else if (v.text != null) v = v.text;
+            }
+            return v == null ? null : v;
+        };
+        const cell = (row, key) => {
+            const v = rawCell(row, key);
             if (v == null) return "";
             if (v instanceof Date) return v.toISOString().slice(0, 10);
-            if (typeof v === "object" && v.text) return String(v.text).trim();
             return String(v).trim();
         };
+        const today = new Date().toISOString().slice(0, 10);
 
         const defaultHours = await getDefaultHoursAttended(schoolId);
         const rowErrors = [];
@@ -593,14 +620,27 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
             const studentName = cell(row, "student_name");
             const admissionNo = cell(row, "admission_no");
             const batchName = cell(row, "batch_name");
-            const attendanceDate = cell(row, "attendance_date");
+            const attendanceDate = parseAttendanceDate(rawCell(row, "attendance_date"));
             const status = cell(row, "status") || "Present";
             const hoursRaw = cell(row, "hours_attended");
 
             if (!studentName && !admissionNo) continue; // skip fully blank rows
 
-            if (!batchName || !attendanceDate) {
-                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): missing Batch or Date.`);
+            if (!batchName) {
+                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): missing Batch.`);
+                continue;
+            }
+            if (!attendanceDate) {
+                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): Date "${cell(row, "attendance_date")}" is missing or not a valid date (use DD/MM/YYYY or YYYY-MM-DD).`);
+                continue;
+            }
+            if (attendanceDate > today) {
+                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): Date ${attendanceDate} is in the future.`);
+                continue;
+            }
+            const hoursNum = String(hoursRaw).trim() === "" ? null : Number(String(hoursRaw).trim());
+            if (hoursNum != null && (!Number.isFinite(hoursNum) || hoursNum < 0 || hoursNum > 24)) {
+                rowErrors.push(`Row ${rowNum} (${studentName || admissionNo}): Hours Attended "${hoursRaw}" is not a valid number of hours.`);
                 continue;
             }
 
@@ -633,7 +673,7 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
 
             const isDifferentBatch = String(student.batch_id) !== String(batch.id);
             const isPresent = status.toLowerCase().startsWith("p") || isDifferentBatch; // cross-batch visits are always "Present"
-            const hours = isPresent ? (parseFloat(hoursRaw) || defaultHours) : null;
+            const hours = isPresent ? (hoursNum || defaultHours) : null;
 
             parsedRows.push({
                 studentId: student.id, batchId: batch.id, attendanceDate,
@@ -641,26 +681,30 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
             });
         }
 
-        // Group by (batch, date) so each group can be applied with the
-        // same delete-then-reinsert semantics as a normal manual Save.
-        const groups = {};
-        parsedRows.forEach(r => {
-            const key = `${r.batchId}|${r.attendanceDate}`;
-            (groups[key] = groups[key] || []).push(r);
-        });
+        // If the same student appears twice for the same batch and date, the
+        // later row wins (one record per student per batch per day).
+        const byKey = new Map();
+        parsedRows.forEach(r => byKey.set(`${r.studentId}|${r.batchId}|${r.attendanceDate}`, r));
 
         let imported = 0;
-        for (const key of Object.keys(groups)) {
-            const [batchId, attendanceDate] = key.split("|");
-            await dbRun("DELETE FROM attendance WHERE school_id=? AND batch_id=? AND attendance_date=?", [schoolId, batchId, attendanceDate]);
-            for (const r of groups[key]) {
+        try {
+          await withTransaction(async () => {
+            for (const r of byKey.values()) {
+                // Replace only THIS student's record for this batch + date.
+                await dbRun("DELETE FROM attendance WHERE school_id=? AND student_id=? AND batch_id=? AND attendance_date=?",
+                    [schoolId, r.studentId, r.batchId, r.attendanceDate]);
                 await dbRun(
                     `INSERT INTO attendance (student_id, attendance_date, status, batch_id, is_different_batch, hours_attended, school_id)
                      VALUES (?,?,?,?,?,?,?)`,
-                    [r.studentId, r.attendanceDate, r.status, batchId, r.isDifferentBatch ? 1 : 0, r.hours, schoolId]
+                    [r.studentId, r.attendanceDate, r.status, r.batchId, r.isDifferentBatch ? 1 : 0, r.hours, schoolId]
                 );
                 imported++;
             }
+          });
+        } catch (e) {
+            return res.render("importAttendance", { result: {
+                error: `Nothing was imported - an unexpected error stopped the file part-way, so all of its rows were undone. (${e.message})`
+            } });
         }
 
         res.render("importAttendance", { result: { imported, rowErrors, total: sheet.rowCount - 1 } });

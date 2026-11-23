@@ -140,7 +140,25 @@ async function assignPlanToStudentUnlocked(studentId, plan, schoolId) {
     if (!student || !student.date_of_joining) return { inserted: 0, removed: 0 };
     if (String(student.level_id) !== String(plan.level_id)) return { inserted: 0, removed: 0 };
 
-    const wanted = computePeriods(plan, student.date_of_joining);
+    let wanted = computePeriods(plan, student.date_of_joining);
+
+    // Promoted INTO this plan's Level? Then this plan only applies from the
+    // promotion date - months before that were billed under the old Level.
+    const promo = await dbGet(
+        "SELECT MAX(changed_date) AS d FROM level_history WHERE school_id=? AND student_id=? AND new_level_id=?",
+        [schoolId, studentId, plan.level_id]);
+    if (promo && promo.d) {
+        wanted = wanted.filter(p => p.dueDate >= promo.d);
+        // ...and never bill a month twice: skip a month this student already
+        // has for the same fee from another plan (e.g. their old Level's).
+        const otherMonths = await dbAll(
+            `SELECT installment_label FROM fee_structure
+             WHERE student_id=? AND fee_category_id=? AND installment_label IS NOT NULL
+               AND (fee_plan_id IS NULL OR fee_plan_id <> ?)`,
+            [studentId, plan.fee_category_id, plan.id]);
+        const taken = new Set(otherMonths.map(r => r.installment_label));
+        wanted = wanted.filter(p => !taken.has(p.label));
+    }
     const wantedLabels = new Set(wanted.map(p => p.label));
 
     let existing = await dbAll(
@@ -288,6 +306,39 @@ async function assignExplicitOrActivePlans(studentId, schoolId, explicitPlanId) 
 }
 
 /**
+ * Called when a student is promoted to a new Level (routes/levelPromotion.js).
+ * Their old Level's plan installments that fall due ON or AFTER the
+ * promotion date and have no payment/discount are removed, then the new
+ * Level's plan(s) are applied from the promotion date onward (see the
+ * level_history check in assignPlanToStudentUnlocked). Paid or discounted
+ * installments are never touched. Returns { removed, inserted }.
+ */
+async function switchPlansOnPromotion(studentId, schoolId, oldLevelId, newLevelId, fromDate) {
+    let removed = 0, inserted = 0;
+    if (oldLevelId && String(oldLevelId) !== String(newLevelId)) {
+        const res = await dbRun(
+            `DELETE FROM fee_structure
+             WHERE school_id=? AND student_id=? AND due_date >= ?
+               AND fee_plan_id IN (SELECT id FROM fee_plans WHERE school_id=? AND level_id=?)
+               AND NOT EXISTS (SELECT 1 FROM fee_payments p WHERE p.fee_structure_id = fee_structure.id)
+               AND NOT EXISTS (SELECT 1 FROM fee_discounts d WHERE d.fee_structure_id = fee_structure.id)`,
+            [schoolId, studentId, fromDate, schoolId, oldLevelId]);
+        removed = res.changes || 0;
+    }
+    // A Fee Plan chosen for the OLD Level no longer applies.
+    await dbRun(
+        `UPDATE students SET fee_plan_id=NULL WHERE id=? AND school_id=? AND fee_plan_id IS NOT NULL
+           AND fee_plan_id NOT IN (SELECT id FROM fee_plans WHERE level_id=?)`,
+        [studentId, schoolId, newLevelId]);
+    const plans = await dbAll("SELECT * FROM fee_plans WHERE school_id=? AND level_id=?", [schoolId, newLevelId]);
+    for (const plan of plans) {
+        const r = await assignPlanToStudent(studentId, plan, schoolId);
+        inserted += r.inserted;
+    }
+    return { removed, inserted };
+}
+
+/**
  * One-time, idempotent backfill run at startup: gives every per-student
  * installment that has a "Month YYYY ..." label but no due date one, so
  * installments created before due dates existed (including ones left behind
@@ -319,4 +370,4 @@ async function backfillDueDates() {
     return updated;
 }
 
-module.exports = { backfillDueDates, computePeriods, assignPlanToStudent, assignPlanToLevel, assignActivePlansForStudent, assignExplicitOrActivePlans, SPAN_MONTHS_BY_MODE };
+module.exports = { switchPlansOnPromotion, backfillDueDates, computePeriods, assignPlanToStudent, assignPlanToLevel, assignActivePlansForStudent, assignExplicitOrActivePlans, SPAN_MONTHS_BY_MODE };

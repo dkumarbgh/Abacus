@@ -158,6 +158,8 @@ async function createRole(name) {
     if (SYSTEM_ROLES.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
         throw new Error(`"${trimmed}" is a built-in role name and can't be reused.`);
     }
+    const existing = await get(`SELECT id FROM roles WHERE LOWER(name)=LOWER(?)`, [trimmed]);
+    if (existing) throw new Error(`A role called "${trimmed}" already exists.`);
     await run(`INSERT INTO roles (name, is_system) VALUES (?, 0)`, [trimmed]);
 }
 

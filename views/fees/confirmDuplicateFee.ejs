@@ -1,0 +1,34 @@
+<%- include("../partials/header") %>
+<%- include("../partials/navbar") %>
+
+<div class="container mt-4" style="max-width: 760px;">
+    <div class="card border-warning shadow-sm">
+        <div class="card-header bg-warning"><h5 class="mb-0">Possible double charge</h5></div>
+        <div class="card-body">
+            <p>
+                <b><%= levelName %></b> already has a Fee Plan for <b><%= feeName %></b> (<%= academicYear %>):
+            </p>
+            <ul>
+                <% plans.forEach(p => { %>
+                    <li><%= p.payment_mode %>, ₹<%= p.amount_per_period %> per period, <%= p.duration_months || 12 %> months</li>
+                <% }) %>
+            </ul>
+            <p>
+                Adding a one-time <b><%= feeName %></b> item of ₹<%= amount %> for the whole Level will charge every
+                student on that plan <b>both</b> amounts. If you meant to change how this fee is charged,
+                edit or delete the plan instead.
+            </p>
+            <form method="POST" action="/fee-structure/add" class="d-inline">
+                <input type="hidden" name="level_id" value="<%= levelId %>">
+                <input type="hidden" name="fee_category_id" value="<%= feeCategoryId %>">
+                <input type="hidden" name="academic_year" value="<%= academicYear %>">
+                <input type="hidden" name="amount" value="<%= amount %>">
+                <input type="hidden" name="confirm_duplicate" value="1">
+                <button class="btn btn-outline-danger">Save anyway (charge both)</button>
+            </form>
+            <a href="/fee-structure" class="btn btn-primary ms-2">Cancel</a>
+        </div>
+    </div>
+</div>
+
+<%- include("../partials/footer") %>

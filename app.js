@@ -94,6 +94,14 @@ app.use(bodyParser.json());
 // when running directly on a laptop.
 app.set("trust proxy", 1);
 
+// Warn loudly if the session/JWT secrets were never set - the built-in
+// fallback is public, so anyone could forge a login with it.
+["SESSION_SECRET", "JWT_SECRET"].forEach(k => {
+    if (!process.env[k] || process.env[k] === "change-this-secret-in-production") {
+        console.warn(`[SECURITY] ${k} is not set in .env - set it to a long random value before going live.`);
+    }
+});
+
 app.use(session({
     secret: process.env.SESSION_SECRET || "change-this-secret-in-production",
     resave: false,
@@ -132,6 +140,13 @@ app.use(async (req, res, next) => {
     res.locals.features = features;
     next();
 });
+
+// Uploaded files (student photos, certificates, test papers, practice
+// sheets, face images) need a login - previously anyone who guessed a file
+// name could download them. WhatsApp/email attach files from disk, not via
+// these URLs, so sending is unaffected. CSS/JS/images outside /uploads stay
+// public so the login page still renders.
+app.use("/uploads", requireLogin);
 
 // Static Files
 app.use(express.static(path.join(__dirname, "public")));

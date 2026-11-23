@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { switchPlansOnPromotion } = require("../services/feePlanGenerator");
 const db = require("../config/database");
 const { requireLogin, requireRole } = require("../middleware/auth");
 const { requireCapability } = require("../services/capabilities");
@@ -110,6 +111,12 @@ router.post("/apply", requireRole("Admin"), async (req, res) => {
             );
 
             await dbRun("UPDATE students SET level_id=? WHERE id=? AND school_id=?", [new_level_id, student.id, schoolId]);
+
+            // Move their fees to the new Level from the promotion date: unpaid
+            // old-Level installments due from that date are dropped and the new
+            // Level's plan takes over. Previously the old Level's full year kept
+            // being billed and the new Level's plan was never applied.
+            await switchPlansOnPromotion(student.id, schoolId, student.level_id, new_level_id, promotionDate);
 
         }
 

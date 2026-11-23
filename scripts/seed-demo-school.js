@@ -17,6 +17,12 @@
  * Usage:
  *   node scripts/seed-demo-school.js
  *   node scripts/seed-demo-school.js "My Demo Academy"
+ *   node scripts/seed-demo-school.js "My Demo Academy" demo.admin@iqplus.com MyPass@123
+ *
+ * The demo school gets its OWN full-access Admin login (default
+ * demo.admin@iqplus.com). If no password is given, a random one is
+ * generated and printed once - the old fixed "Demo@123" is public in this
+ * repository, so it must never protect a login on a live server.
  *
  * Safe to run on a database with other schools - it only ever ADDS a new
  * school, never touches existing ones. Running it twice makes two demo
@@ -26,10 +32,11 @@ require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const db = require("../config/database");
 const { assignPlanToLevel } = require("../services/feePlanGenerator");
+const { assignNextReceiptNo } = require("../services/schoolSettings");
 
 const SCHOOL_NAME = process.argv[2] || "IQPlusAcademy";
-const ADMIN_EMAIL = "admin@iqplus.com";
-const ADMIN_PASSWORD = "Demo@123";
+const ADMIN_EMAIL = (process.argv[3] || "demo.admin@iqplus.com").trim();
+const ADMIN_PASSWORD = process.argv[4] || ("Demo-" + require("crypto").randomBytes(6).toString("hex"));
 
 const run = (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }));
 const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => e ? rej(e) : res(r)));
@@ -59,6 +66,10 @@ async function seedDemo() {
 
     await wait(1500); // let config/database.js finish its migrations
 
+    // All-or-nothing: if anything fails, the half-built school is rolled back
+    // instead of being left behind in the database.
+    await run("BEGIN IMMEDIATE");
+
     // ---- School + admin ----
     const school = await run(
         "INSERT INTO schools (name, address, phone, email) VALUES (?,?,?,?)",
@@ -67,11 +78,11 @@ async function seedDemo() {
     const S = school.lastID;
     await run("UPDATE schools SET admission_no_prefix='BM', admission_no_next=25 WHERE id=?", [S]);
 
-    const existingAdmin = await get("SELECT id FROM users WHERE email=?", [ADMIN_EMAIL]);
-    if (!existingAdmin) {
-        await run("INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?, 'Admin')",
-            [S, "Demo Admin", ADMIN_EMAIL, bcrypt.hashSync(ADMIN_PASSWORD, 10)]);
-    }
+    // Logins are per (email, school): this only ever adds a login for the NEW
+    // school, so an Admin with the same email in another school is untouched.
+    const existingAdmin = null;
+    await run("INSERT INTO users (school_id, name, email, password_hash, role) VALUES (?,?,?,?, 'Admin')",
+        [S, "Demo Admin", ADMIN_EMAIL, bcrypt.hashSync(ADMIN_PASSWORD, 10)]);
 
     // ---- Classes (school standard) ----
     const classIds = [];
@@ -151,7 +162,6 @@ async function seedDemo() {
 
     // ---- Payments: pay every period that has already started, except a
     //      few students who are behind (so the dues reports aren't empty) ----
-    let receipt = 1;
     const today = ymd(new Date());
     for (let i = 0; i < students.length; i++) {
         const st = students[i];
@@ -175,10 +185,12 @@ async function seedDemo() {
             await run(
                 `INSERT INTO fee_payments (student_id, fee_structure_id, amount_paid, payment_date, mode, receipt_no, remarks, school_id)
                  VALUES (?,?,?,?,?,?,?,?)`,
-                [st.id, p.id, p.amount, payDate, pick(["Cash", "UPI", "UPI", "Bank Transfer"]), `RCPT-${String(receipt++).padStart(4, "0")}`, null, S]);
+                [st.id, p.id, p.amount, payDate, pick(["Cash", "UPI", "UPI", "Bank Transfer"]), await assignNextReceiptNo(S), null, S]);
         }
     }
-    await run("UPDATE schools SET receipt_no_next=? WHERE id=?", [receipt, S]).catch(() => {});
+    // (Receipt numbers come from the app's own numbering, which skips any
+    // number another school already uses - hard-coded RCPT-0001... clashed
+    // with existing schools on a real database.)
 
     // ---- Attendance: every scheduled class day in the last 8 weeks ----
     for (let n = 56; n >= 1; n--) {
@@ -208,8 +220,10 @@ async function seedDemo() {
     for (let i = 0; i < leads.length; i++) {
         await run(`INSERT INTO referrals (school_id, referring_student_id, lead_name, lead_phone, status, coupon_code, notes)
                    VALUES (?,?,?,?,?,?,?)`,
-            [S, students[i * 3].id, leads[i][0], leads[i][1], leads[i][2], `BM-REF-${101 + i}`, "Demo lead"]).catch(() => {});
+            [S, students[i * 3].id, leads[i][0], leads[i][1], leads[i][2], `DEMO${S}-REF-${101 + i}`, "Demo lead"]);
     }
+
+    await run("COMMIT");
 
     const counts = {};
     for (const t of ["students", "attendance", "fee_structure", "fee_payments", "exam_results", "referrals"]) {
@@ -223,4 +237,8 @@ async function seedDemo() {
     process.exit(0);
 }
 
-seedDemo().catch(e => { console.error("Seeding failed:", e); process.exit(1); });
+seedDemo().catch(async e => {
+    await run("ROLLBACK").catch(() => {});
+    console.error("Seeding failed - nothing was saved:", e.message);
+    process.exit(1);
+});
