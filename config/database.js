@@ -1028,6 +1028,12 @@ async function migrate() {
     // specific form section, just a general note field on Add/Edit Student.
     await addColumnIfMissing("students", "remarks", "TEXT");
 
+    // Fee Payment Option (Annual / Monthly) - students in the same Level can
+    // follow different fee structures. See services/feeOption.js.
+    await addColumnIfMissing("students", "fee_option", "TEXT");
+    await addColumnIfMissing("fee_structure", "applies_to", "TEXT");
+    await addColumnIfMissing("fee_plans", "applies_to", "TEXT");
+
     // Optional Exam Fee: when set, an Exam is linked to a normal
     // fee_structure row (auto-created for it - see routes/exams.js),
     // so the fee shows up in every existing fee screen (Fee Dues, Fee

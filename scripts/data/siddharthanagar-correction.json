@@ -1,0 +1,1587 @@
+{
+ "school_id": 3,
+ "tags": {
+  "ANNUAL PAYMENT": "Annual",
+  "BOOK KIT FEE": "Monthly",
+  "TUITION FEE": "Monthly"
+ },
+ "students": [
+  {
+   "match": {
+    "admission_no": "1"
+   },
+   "system_name": "Tavish S",
+   "register_name": "TAVISH",
+   "set": {
+    "date_of_joining": "2026-05-28",
+    "level": "3",
+    "fee_option": "Annual",
+    "guardian_phone": "9686860366"
+   },
+   "was": {
+    "date_of_joining": "2026-05-28",
+    "level": "1",
+    "phone": "968660366"
+   },
+   "register_phone": [
+    "9686860366",
+    "9663655484"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "3"
+   },
+   "system_name": "Harshad M",
+   "register_name": "HARSHADA M",
+   "set": {
+    "date_of_joining": "2026-06-25",
+    "level": "FOUNDATION",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-01",
+    "level": "FOUNDATION",
+    "phone": "7899699625"
+   },
+   "register_phone": [
+    "7899699625",
+    "8970354466"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "4"
+   },
+   "system_name": "Raghavendra gowda BS.",
+   "register_name": "RAGHAVENDRA GOWDA  B.S",
+   "set": {
+    "date_of_joining": "2026-06-29",
+    "level": "3",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-01",
+    "level": "2",
+    "phone": "9632934222"
+   },
+   "register_phone": [
+    "9632834222",
+    "8904587374"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "5"
+   },
+   "system_name": "Anvith V",
+   "register_name": "ANVITH  U",
+   "set": {
+    "date_of_joining": "2026-07-02",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-01",
+    "level": "1",
+    "phone": "8095899313"
+   },
+   "register_phone": [
+    "8095899313",
+    "8095899312"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "6"
+   },
+   "system_name": "Shobith Kumar",
+   "register_name": "SHOBITH KUMAR .K",
+   "set": {
+    "date_of_joining": "2026-07-03",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-02",
+    "level": "1",
+    "phone": "8123594729"
+   },
+   "register_phone": [
+    "8123594729",
+    "9738046068"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "7"
+   },
+   "system_name": "Kaisoria",
+   "register_name": "KAISHORIA",
+   "set": {
+    "date_of_joining": "2026-07-03",
+    "level": "INTRODUCTORY",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-03",
+    "level": "FOUNDATION",
+    "phone": "8762204647"
+   },
+   "register_phone": [
+    "8762204647"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "8"
+   },
+   "system_name": "Niharika Gowda C",
+   "register_name": "NIHARIKA GOWDA",
+   "set": {
+    "date_of_joining": "2026-07-04",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-06-07",
+    "level": "1",
+    "phone": "7483956772"
+   },
+   "register_phone": [
+    "7483956772",
+    "9741620328"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "10"
+   },
+   "system_name": "Dhanvith P",
+   "register_name": "DHANVITHA P",
+   "set": {
+    "date_of_joining": "2026-07-04",
+    "level": "FOUNDATION",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-06-07",
+    "level": "1",
+    "phone": "8277488444"
+   },
+   "register_phone": [
+    "8277499444",
+    "8495068188"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "9"
+   },
+   "system_name": "Lishika",
+   "register_name": "LISHIKA. K",
+   "set": {
+    "date_of_joining": "2026-07-04",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-06-07",
+    "level": "1",
+    "phone": "9845062426"
+   },
+   "register_phone": [
+    "98845062426",
+    "9845578459"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "11"
+   },
+   "system_name": "Manvitha D",
+   "register_name": "MANVITHA .D",
+   "set": {
+    "date_of_joining": "2026-07-08",
+    "level": "INTRODUCTORY",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-08-07",
+    "level": "1",
+    "phone": "9620608815"
+   },
+   "register_phone": [
+    "9620608815",
+    "7019138909"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "12"
+   },
+   "system_name": "Samoksh",
+   "register_name": "SAMOKSH",
+   "set": {
+    "date_of_joining": "2026-07-10",
+    "level": "1",
+    "fee_option": "Annual"
+   },
+   "was": {
+    "date_of_joining": "2026-07-10",
+    "level": "1",
+    "phone": "9844071227"
+   },
+   "register_phone": [
+    "9986909568",
+    "9844071227"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "13"
+   },
+   "system_name": "Adithi S",
+   "register_name": "ADITHI S",
+   "set": {
+    "date_of_joining": "2026-07-15",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-22",
+    "level": "1",
+    "phone": "9886681934"
+   },
+   "register_phone": [
+    "9886681934",
+    "9742270092"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "14"
+   },
+   "system_name": "Sanskar A",
+   "register_name": "SANSKAR .A",
+   "set": {
+    "date_of_joining": "2026-07-15",
+    "level": "2",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-20",
+    "level": "2",
+    "phone": "9742656867"
+   },
+   "register_phone": [
+    "9742656867"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "15"
+   },
+   "system_name": "Chethana M V",
+   "register_name": "CHETHANA  M.V",
+   "set": {
+    "date_of_joining": "2026-07-15",
+    "level": "2",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-20",
+    "level": "2",
+    "phone": "9980146480"
+   },
+   "register_phone": [
+    "9980146480",
+    "9986830826"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "17"
+   },
+   "system_name": "Adhvi M",
+   "register_name": "ADHVI .M",
+   "set": {
+    "date_of_joining": "2026-07-21",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-20",
+    "level": "1",
+    "phone": "9880882040"
+   },
+   "register_phone": [
+    "9880882040",
+    "9341442266"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "16"
+   },
+   "system_name": "Jenkar",
+   "register_name": "JAINKAR .M",
+   "set": {
+    "date_of_joining": "2026-07-21",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-20",
+    "level": "1",
+    "phone": "9880882040"
+   },
+   "register_phone": [
+    "9880992040",
+    "9341442266"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "18"
+   },
+   "system_name": "Rutvi M",
+   "register_name": "RUTVI .M",
+   "set": {
+    "date_of_joining": "2026-08-04",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-07-20",
+    "level": "1",
+    "phone": "9902320519"
+   },
+   "register_phone": [
+    "9902320519"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "19"
+   },
+   "system_name": "Havisha K gowda",
+   "register_name": "HAVISHA K. GOWDA",
+   "set": {
+    "date_of_joining": "2026-08-13",
+    "level": "1",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-11-08",
+    "level": "1",
+    "phone": "7829885988"
+   },
+   "register_phone": [
+    "7829885988",
+    "8095959995"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "20"
+   },
+   "system_name": "Manav U",
+   "register_name": "MANAV .U",
+   "set": {
+    "date_of_joining": "2026-08-13",
+    "level": "FOUNDATION",
+    "fee_option": "Monthly"
+   },
+   "was": {
+    "date_of_joining": "2026-08-18",
+    "level": "1",
+    "phone": "8248791024"
+   },
+   "register_phone": [
+    "8248791025",
+    "8310401528"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "21"
+   },
+   "system_name": "Saanvi V M",
+   "register_name": "SAANVI.V.M",
+   "set": {
+    "date_of_joining": "2026-08-17",
+    "level": "FOUNDATION",
+    "fee_option": "Annual"
+   },
+   "was": {
+    "date_of_joining": "2026-08-11",
+    "level": "1",
+    "phone": "9620515000"
+   },
+   "register_phone": [
+    "9620515000",
+    "9845288528"
+   ]
+  },
+  {
+   "match": {
+    "admission_no": "2"
+   },
+   "system_name": "Nihal",
+   "register_name": "(not in register)",
+   "set": {
+    "date_of_joining": "2026-10-01",
+    "level": "3",
+    "fee_option": "Annual"
+   },
+   "was": {
+    "date_of_joining": "2026-10-01",
+    "level": "3",
+    "phone": "9880179581"
+   },
+   "register_phone": []
+  }
+ ],
+ "new_students": [
+  {
+   "admission_no": "22",
+   "name": "Hithashree S",
+   "date_of_joining": "2026-09-10",
+   "level": "1",
+   "fee_option": "Monthly",
+   "guardian_phone": "9972443367",
+   "guardian_phone_2": "9964803072",
+   "standard": "7TH",
+   "family": "F:SHIVAKUMAR.K M:MAMTHA .B"
+  },
+  {
+   "admission_no": "23",
+   "name": "Hansika S",
+   "date_of_joining": "2026-09-10",
+   "level": "INTRODUCTORY",
+   "fee_option": "Monthly",
+   "guardian_phone": "9972443367",
+   "guardian_phone_2": "9964803072",
+   "standard": "1ST",
+   "family": "F:SHIVAKUMAR M:MAMATHA .B"
+  },
+  {
+   "admission_no": "24",
+   "name": "Vihaan Rayan",
+   "date_of_joining": "2026-08-27",
+   "level": "INTRODUCTORY",
+   "fee_option": "Monthly",
+   "guardian_phone": "7019036598",
+   "guardian_phone_2": "8217880729",
+   "standard": "1ST",
+   "family": "F:MANJUNANTH M:ARPITH"
+  },
+  {
+   "admission_no": "25",
+   "name": "Ayush S",
+   "date_of_joining": "2026-10-28",
+   "level": "1",
+   "fee_option": "Monthly",
+   "guardian_phone": "9964488272",
+   "guardian_phone_2": "8549901510",
+   "standard": null,
+   "family": "F:SHIVAPPA M:NANDINI S"
+  }
+ ],
+ "payments": [
+  {
+   "category": "ANNUAL PAYMENT",
+   "amount": 6000,
+   "date": "2026-05-28",
+   "mode": "Online",
+   "remarks": "Register r.no 4401",
+   "student": {
+    "admission_no": "1"
+   },
+   "name": "TAVISH"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-06-25",
+   "mode": "Online",
+   "remarks": "Register r.no 4402 (admission Rs.3000)",
+   "student": {
+    "admission_no": "3"
+   },
+   "name": "HARSHADA M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-06-25",
+   "mode": "Online",
+   "remarks": "Register r.no 4402 (admission Rs.3000)",
+   "student": {
+    "admission_no": "3"
+   },
+   "name": "HARSHADA M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4439",
+   "student": {
+    "admission_no": "3"
+   },
+   "name": "HARSHADA M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-05",
+   "mode": "Online",
+   "remarks": "Register r.no 4463",
+   "student": {
+    "admission_no": "3"
+   },
+   "name": "HARSHADA M"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-06-29",
+   "mode": "Online",
+   "remarks": "Register r.no 4403 (admission Rs.3000)",
+   "student": {
+    "admission_no": "4"
+   },
+   "name": "RAGHAVENDRA GOWDA  B.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-06-29",
+   "mode": "Online",
+   "remarks": "Register r.no 4403 (admission Rs.3000)",
+   "student": {
+    "admission_no": "4"
+   },
+   "name": "RAGHAVENDRA GOWDA  B.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4435",
+   "student": {
+    "admission_no": "4"
+   },
+   "name": "RAGHAVENDRA GOWDA  B.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4435",
+   "student": {
+    "admission_no": "4"
+   },
+   "name": "RAGHAVENDRA GOWDA  B.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4446",
+   "student": {
+    "admission_no": "4"
+   },
+   "name": "RAGHAVENDRA GOWDA  B.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4465",
+   "student": {
+    "admission_no": "4"
+   },
+   "name": "RAGHAVENDRA GOWDA  B.S"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4405 (admission Rs.3000)",
+   "student": {
+    "admission_no": "5"
+   },
+   "name": "ANVITH  U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4405 (admission Rs.3000)",
+   "student": {
+    "admission_no": "5"
+   },
+   "name": "ANVITH  U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-11",
+   "mode": "Cash",
+   "remarks": "Register r.no 4425",
+   "student": {
+    "admission_no": "5"
+   },
+   "name": "ANVITH  U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4445",
+   "student": {
+    "admission_no": "5"
+   },
+   "name": "ANVITH  U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4452",
+   "student": {
+    "admission_no": "5"
+   },
+   "name": "ANVITH  U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-05",
+   "mode": "Online",
+   "remarks": "Register r.no 4476",
+   "student": {
+    "admission_no": "5"
+   },
+   "name": "ANVITH  U"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-03",
+   "mode": "Online",
+   "remarks": "Register r.no 4406 (admission Rs.3000)",
+   "student": {
+    "admission_no": "6"
+   },
+   "name": "SHOBITH KUMAR .K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-03",
+   "mode": "Online",
+   "remarks": "Register r.no 4406 (admission Rs.3000)",
+   "student": {
+    "admission_no": "6"
+   },
+   "name": "SHOBITH KUMAR .K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-08",
+   "mode": "Online",
+   "remarks": "Register r.no 4423",
+   "student": {
+    "admission_no": "6"
+   },
+   "name": "SHOBITH KUMAR .K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4444",
+   "student": {
+    "admission_no": "6"
+   },
+   "name": "SHOBITH KUMAR .K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-12",
+   "mode": "Online",
+   "remarks": "Register r.no 4474",
+   "student": {
+    "admission_no": "6"
+   },
+   "name": "SHOBITH KUMAR .K"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-03",
+   "mode": "Online",
+   "remarks": "Register r.no 4407 (admission Rs.3000)",
+   "student": {
+    "admission_no": "7"
+   },
+   "name": "KAISHORIA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-03",
+   "mode": "Online",
+   "remarks": "Register r.no 4407 (admission Rs.3000)",
+   "student": {
+    "admission_no": "7"
+   },
+   "name": "KAISHORIA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4418",
+   "student": {
+    "admission_no": "7"
+   },
+   "name": "KAISHORIA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-03",
+   "mode": "Online",
+   "remarks": "Register r.no 4436",
+   "student": {
+    "admission_no": "7"
+   },
+   "name": "KAISHORIA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-01",
+   "mode": "Online",
+   "remarks": "Register r.no 4450",
+   "student": {
+    "admission_no": "7"
+   },
+   "name": "KAISHORIA"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4408 (admission Rs.3000)",
+   "student": {
+    "admission_no": "8"
+   },
+   "name": "NIHARIKA GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4408 (admission Rs.3000)",
+   "student": {
+    "admission_no": "8"
+   },
+   "name": "NIHARIKA GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-06",
+   "mode": "Online",
+   "remarks": "Register r.no 4419",
+   "student": {
+    "admission_no": "8"
+   },
+   "name": "NIHARIKA GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4434",
+   "student": {
+    "admission_no": "8"
+   },
+   "name": "NIHARIKA GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4453",
+   "student": {
+    "admission_no": "8"
+   },
+   "name": "NIHARIKA GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-12",
+   "mode": "Online",
+   "remarks": "Register r.no 4468",
+   "student": {
+    "admission_no": "8"
+   },
+   "name": "NIHARIKA GOWDA"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-04",
+   "mode": "Cash",
+   "remarks": "Register r.no 4409 (admission Rs.3000)",
+   "student": {
+    "admission_no": "10"
+   },
+   "name": "DHANVITHA P"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-04",
+   "mode": "Cash",
+   "remarks": "Register r.no 4409 (admission Rs.3000)",
+   "student": {
+    "admission_no": "10"
+   },
+   "name": "DHANVITHA P"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4424",
+   "student": {
+    "admission_no": "10"
+   },
+   "name": "DHANVITHA P"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4437",
+   "student": {
+    "admission_no": "10"
+   },
+   "name": "DHANVITHA P"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4466",
+   "student": {
+    "admission_no": "10"
+   },
+   "name": "DHANVITHA P"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4408 (admission Rs.3000)",
+   "student": {
+    "admission_no": "9"
+   },
+   "name": "LISHIKA. K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4408 (admission Rs.3000)",
+   "student": {
+    "admission_no": "9"
+   },
+   "name": "LISHIKA. K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-06",
+   "mode": "Online",
+   "remarks": "Register r.no 4419",
+   "student": {
+    "admission_no": "9"
+   },
+   "name": "LISHIKA. K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4434",
+   "student": {
+    "admission_no": "9"
+   },
+   "name": "LISHIKA. K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4454",
+   "student": {
+    "admission_no": "9"
+   },
+   "name": "LISHIKA. K"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-12",
+   "mode": "Online",
+   "remarks": "Register r.no 4469",
+   "student": {
+    "admission_no": "9"
+   },
+   "name": "LISHIKA. K"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-08",
+   "mode": "Online",
+   "remarks": "Register r.no 4410 (admission Rs.3000)",
+   "student": {
+    "admission_no": "11"
+   },
+   "name": "MANVITHA .D"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-08",
+   "mode": "Online",
+   "remarks": "Register r.no 4410 (admission Rs.3000)",
+   "student": {
+    "admission_no": "11"
+   },
+   "name": "MANVITHA .D"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-07",
+   "mode": "Cash",
+   "remarks": "Register r.no 4421",
+   "student": {
+    "admission_no": "11"
+   },
+   "name": "MANVITHA .D"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4448",
+   "student": {
+    "admission_no": "11"
+   },
+   "name": "MANVITHA .D"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-05",
+   "mode": "Online",
+   "remarks": "Register r.no 4473",
+   "student": {
+    "admission_no": "11"
+   },
+   "name": "MANVITHA .D"
+  },
+  {
+   "category": "ANNUAL PAYMENT",
+   "amount": 6000,
+   "date": "2026-07-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4411",
+   "student": {
+    "admission_no": "12"
+   },
+   "name": "SAMOKSH"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-15",
+   "mode": "Online",
+   "remarks": "Register r.no 4427 (admission Rs.3000)",
+   "student": {
+    "admission_no": "13"
+   },
+   "name": "ADITHI S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-15",
+   "mode": "Online",
+   "remarks": "Register r.no 4427 (admission Rs.3000)",
+   "student": {
+    "admission_no": "13"
+   },
+   "name": "ADITHI S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4443",
+   "student": {
+    "admission_no": "13"
+   },
+   "name": "ADITHI S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-19",
+   "mode": "Online",
+   "remarks": "Register r.no 4455",
+   "student": {
+    "admission_no": "13"
+   },
+   "name": "ADITHI S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-20",
+   "mode": "Online",
+   "remarks": "Register r.no 4475",
+   "student": {
+    "admission_no": "13"
+   },
+   "name": "ADITHI S"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-15",
+   "mode": "Cash",
+   "remarks": "Register r.no 4413 (admission Rs.3000)",
+   "student": {
+    "admission_no": "14"
+   },
+   "name": "SANSKAR .A"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-15",
+   "mode": "Cash",
+   "remarks": "Register r.no 4413 (admission Rs.3000)",
+   "student": {
+    "admission_no": "14"
+   },
+   "name": "SANSKAR .A"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-01",
+   "mode": "Online",
+   "remarks": "Register r.no 4416",
+   "student": {
+    "admission_no": "14"
+   },
+   "name": "SANSKAR .A"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4448",
+   "student": {
+    "admission_no": "14"
+   },
+   "name": "SANSKAR .A"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-27",
+   "mode": "Online",
+   "remarks": "Register r.no 4459",
+   "student": {
+    "admission_no": "14"
+   },
+   "name": "SANSKAR .A"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-05",
+   "mode": "Online",
+   "remarks": "Register r.no 4473",
+   "student": {
+    "admission_no": "14"
+   },
+   "name": "SANSKAR .A"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-15",
+   "mode": "Cash",
+   "remarks": "Register r.no 4414 (admission Rs.3000)",
+   "student": {
+    "admission_no": "15"
+   },
+   "name": "CHETHANA  M.V"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-15",
+   "mode": "Cash",
+   "remarks": "Register r.no 4414 (admission Rs.3000)",
+   "student": {
+    "admission_no": "15"
+   },
+   "name": "CHETHANA  M.V"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-08",
+   "mode": "Online",
+   "remarks": "Register r.no 4422",
+   "student": {
+    "admission_no": "15"
+   },
+   "name": "CHETHANA  M.V"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-04",
+   "mode": "Cash",
+   "remarks": "Register r.no 4433",
+   "student": {
+    "admission_no": "15"
+   },
+   "name": "CHETHANA  M.V"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-27",
+   "mode": "Cash",
+   "remarks": "Register r.no 4458",
+   "student": {
+    "admission_no": "15"
+   },
+   "name": "CHETHANA  M.V"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-05",
+   "mode": "Cash",
+   "remarks": "Register r.no 4464",
+   "student": {
+    "admission_no": "15"
+   },
+   "name": "CHETHANA  M.V"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-21",
+   "mode": "Online",
+   "remarks": "Register r.no 4415 (admission Rs.3000)",
+   "student": {
+    "admission_no": "17"
+   },
+   "name": "ADHVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-21",
+   "mode": "Online",
+   "remarks": "Register r.no 4415 (admission Rs.3000)",
+   "student": {
+    "admission_no": "17"
+   },
+   "name": "ADHVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-11",
+   "mode": "Cash",
+   "remarks": "Register r.no 4426",
+   "student": {
+    "admission_no": "17"
+   },
+   "name": "ADHVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4442",
+   "student": {
+    "admission_no": "17"
+   },
+   "name": "ADHVI .M"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-07-21",
+   "mode": "Online",
+   "remarks": "Register r.no 4415 (admission Rs.3000)",
+   "student": {
+    "admission_no": "16"
+   },
+   "name": "JAINKAR .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-07-21",
+   "mode": "Online",
+   "remarks": "Register r.no 4415 (admission Rs.3000)",
+   "student": {
+    "admission_no": "16"
+   },
+   "name": "JAINKAR .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-11",
+   "mode": "Online",
+   "remarks": "Register r.no 4426",
+   "student": {
+    "admission_no": "16"
+   },
+   "name": "JAINKAR .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-07",
+   "mode": "Online",
+   "remarks": "Register r.no 4442",
+   "student": {
+    "admission_no": "16"
+   },
+   "name": "JAINKAR .M"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-08-04",
+   "mode": "Cash",
+   "remarks": "Register r.no 4417 (admission Rs.3000)",
+   "student": {
+    "admission_no": "18"
+   },
+   "name": "RUTVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-04",
+   "mode": "Cash",
+   "remarks": "Register r.no 4417 (admission Rs.3000)",
+   "student": {
+    "admission_no": "18"
+   },
+   "name": "RUTVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4438",
+   "student": {
+    "admission_no": "18"
+   },
+   "name": "RUTVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-03",
+   "mode": "Online",
+   "remarks": "Register r.no 4451",
+   "student": {
+    "admission_no": "18"
+   },
+   "name": "RUTVI .M"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-11",
+   "mode": "Online",
+   "remarks": "Register r.no 4470",
+   "student": {
+    "admission_no": "18"
+   },
+   "name": "RUTVI .M"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-08-13",
+   "mode": "Online",
+   "remarks": "Register r.no 4428 (admission Rs.3000)",
+   "student": {
+    "admission_no": "19"
+   },
+   "name": "HAVISHA K. GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-13",
+   "mode": "Online",
+   "remarks": "Register r.no 4428 (admission Rs.3000)",
+   "student": {
+    "admission_no": "19"
+   },
+   "name": "HAVISHA K. GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-04",
+   "mode": "Online",
+   "remarks": "Register r.no 4440",
+   "student": {
+    "admission_no": "19"
+   },
+   "name": "HAVISHA K. GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-02",
+   "mode": "Online",
+   "remarks": "Register r.no 4449",
+   "student": {
+    "admission_no": "19"
+   },
+   "name": "HAVISHA K. GOWDA"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-12",
+   "mode": "Online",
+   "remarks": "Register r.no 4468",
+   "student": {
+    "admission_no": "19"
+   },
+   "name": "HAVISHA K. GOWDA"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-08-13",
+   "mode": "Online",
+   "remarks": "Register r.no 4429 (admission Rs.3000)",
+   "student": {
+    "admission_no": "20"
+   },
+   "name": "MANAV .U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-13",
+   "mode": "Online",
+   "remarks": "Register r.no 4429 (admission Rs.3000)",
+   "student": {
+    "admission_no": "20"
+   },
+   "name": "MANAV .U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-09-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4447",
+   "student": {
+    "admission_no": "20"
+   },
+   "name": "MANAV .U"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-28",
+   "mode": "Online",
+   "remarks": "Register r.no 4477",
+   "student": {
+    "admission_no": "20"
+   },
+   "name": "MANAV .U"
+  },
+  {
+   "category": "ANNUAL PAYMENT",
+   "amount": 6000,
+   "date": "2026-08-17",
+   "mode": "Cash",
+   "remarks": "Register r.no 4430",
+   "student": {
+    "admission_no": "21"
+   },
+   "name": "SAANVI.V.M"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-10-10",
+   "mode": "Cash",
+   "remarks": "Register r.no 4446 (admission Rs.3000)",
+   "student": {
+    "admission_no": "22"
+   },
+   "name": "HITHASHREE.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-10",
+   "mode": "Cash",
+   "remarks": "Register r.no 4446 (admission Rs.3000)",
+   "student": {
+    "admission_no": "22"
+   },
+   "name": "HITHASHREE.S"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-10-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4446 (admission Rs.3000)",
+   "student": {
+    "admission_no": "23"
+   },
+   "name": "HANSIKA.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-10",
+   "mode": "Online",
+   "remarks": "Register r.no 4446 (admission Rs.3000)",
+   "student": {
+    "admission_no": "23"
+   },
+   "name": "HANSIKA.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-24",
+   "mode": "Online",
+   "remarks": "Register",
+   "student": {
+    "admission_no": "23"
+   },
+   "name": "HANSIKA.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-08-27",
+   "mode": "Cash",
+   "remarks": "Register r.no 4432",
+   "student": {
+    "admission_no": "24"
+   },
+   "name": "VIHAAN RAYAN"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-11-05",
+   "mode": "Online",
+   "remarks": "Register r.no 4471",
+   "student": {
+    "admission_no": "24"
+   },
+   "name": "VIHAAN RAYAN"
+  },
+  {
+   "category": "BOOK KIT FEE",
+   "amount": 2000,
+   "date": "2026-10-28",
+   "mode": "Online",
+   "remarks": "Register r.no 4460 (admission Rs.3000)",
+   "student": {
+    "admission_no": "25"
+   },
+   "name": "AYUSH.S"
+  },
+  {
+   "category": "TUITION FEE",
+   "amount": 1000,
+   "date": "2026-10-28",
+   "mode": "Online",
+   "remarks": "Register r.no 4460 (admission Rs.3000)",
+   "student": {
+    "admission_no": "25"
+   },
+   "name": "AYUSH.S"
+  }
+ ],
+ "notes": [
+  "Dhanvitha: November entry is a copy of October (2 Oct, receipt 4466) - not counted (to confirm)",
+  "Sanskar: Rs.3,000 and Rs.1,000 on 15 Jul share receipt 4413 - counted once as Rs.3,000 (to confirm)"
+ ]
+}

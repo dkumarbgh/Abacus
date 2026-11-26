@@ -7,6 +7,7 @@ const { sendBulk } = require("../services/whatsappClient");
 const { requireLogin, requireRole } = require("../middleware/auth");
 const { requireCapability } = require("../services/capabilities");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
+const { feeAppliesToStudent } = require("../services/feeOption");
 const { getSimpleFeeMode } = require("../services/schoolSettings");
 const { getElapsedInfo, computeExpected, classifyRegularity } = require("../services/attendanceCalc");
 
@@ -623,6 +624,11 @@ function computeDuesByClass(schoolId, classId, callback) {
 
                         if (err) return callback(err);
 
+                        // student|item pairs that already have a payment or discount
+                        const withMoney = new Set();
+                        allPayments.forEach(p => withMoney.add(p.student_id + "|" + p.fee_structure_id));
+                        allDiscounts.forEach(d => withMoney.add(d.student_id + "|" + d.fee_structure_id));
+
                         const results = students.map(student => {
 
                             // A fee_structure row applies to this student if it's either a
@@ -632,10 +638,14 @@ function computeDuesByClass(schoolId, classId, callback) {
                             // personalized item created just for THIS student (e.g. the
                             // "Course Fee" from Total Fee on their profile) - never someone
                             // else's personalized item, even if they're in the same class/level.
+                            // Fee Payment Option (Annual/Monthly): an item meant for the
+                            // other option is left out - unless money or a discount was
+                            // already recorded against it, so nothing received is hidden.
                             const structures = allStructures.filter(fs =>
-                                (fs.student_id == null && fs.class_id != null && fs.class_id === student.class_id) ||
-                                (fs.student_id == null && fs.level_id != null && fs.level_id === student.level_id) ||
-                                fs.student_id === student.id
+                                ((fs.student_id == null && fs.class_id != null && fs.class_id === student.class_id) ||
+                                 (fs.student_id == null && fs.level_id != null && fs.level_id === student.level_id) ||
+                                 fs.student_id === student.id) &&
+                                (feeAppliesToStudent(fs, student) || withMoney.has(student.id + "|" + fs.id))
                             );
 
                             const feeItems = structures.map(fs => {

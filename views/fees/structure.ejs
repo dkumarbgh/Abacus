@@ -69,6 +69,17 @@
                             <input type="number" name="amount" class="form-control" required>
                         </div>
 
+                        <div class="mb-3">
+                            <label class="form-label">For</label>
+                            <select name="applies_to" class="form-select">
+                                <option value="">All students in the Level</option>
+                                <% feeOptions.forEach(function(o){ %>
+                                    <option value="<%= o %>"><%= o %> fee students only</option>
+                                <% }) %>
+                            </select>
+                            <small class="text-muted">Use this when students in the same Level pay differently, e.g. an Annual Payment only for Annual students and Tuition only for Monthly students. Each student's option is set on their profile (Fee Payment Option).</small>
+                        </div>
+
                         <button class="btn btn-success w-100">Save Fee Structure</button>
 
                     </form>
@@ -140,6 +151,17 @@
                                 <input type="number" step="0.01" name="amount_per_period" class="form-control" placeholder="e.g. 1000" required>
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">For</label>
+                                <select name="applies_to" class="form-select">
+                                    <option value="">All students in the Level</option>
+                                    <% feeOptions.forEach(function(o){ %>
+                                        <option value="<%= o %>"><%= o %> fee students only</option>
+                                    <% }) %>
+                                </select>
+                                <small class="text-muted">Use this when students in the same Level pay differently, e.g. an Annual Payment only for Annual students and Tuition only for Monthly students. Each student's option is set on their profile (Fee Payment Option).</small>
+                            </div>
+
                             <button class="btn btn-success w-100">Save Fee Plan</button>
 
                         </form>
@@ -173,11 +195,31 @@
                         <a href="/students">profile</a> to set their Fee Due Date.
                     </p>
 
+                    <%
+                    // "For" cell: who this fee applies to, with a small form to change it.
+                    function forCell(kind, current, levelId, hidden) {
+                        const c = optionCounts[levelId] || { Annual: 0, Monthly: 0, none: 0 };
+                        let html = '<form action="/fee-structure/set-for" method="POST" class="d-flex gap-1 align-items-center"' +
+                            (kind === 'plan' ? ' onsubmit="return confirm(\'The fee periods this plan creates will be updated now: added for students who match, and UNPAID periods removed for students who no longer match. Paid periods are never touched. Continue?\')"' : '') + '>';
+                        html += '<input type="hidden" name="kind" value="' + kind + '">';
+                        Object.keys(hidden).forEach(function(k){ html += '<input type="hidden" name="' + k + '" value="' + String(hidden[k] == null ? '' : hidden[k]).replace(/"/g, '&quot;') + '">'; });
+                        html += '<select name="applies_to" class="form-select form-select-sm" style="min-width:8rem">';
+                        html += '<option value=""' + (!current ? ' selected' : '') + '>All students</option>';
+                        feeOptions.forEach(function(o){ html += '<option value="' + o + '"' + (current === o ? ' selected' : '') + '>' + o + ' only</option>'; });
+                        html += '</select><button class="btn btn-outline-secondary btn-sm">Save</button></form>';
+                        if (current && levelId) {
+                            html += '<small class="text-muted d-block">' + (c[current] || 0) + ' student(s) on ' + current + '</small>';
+                            if (c.none) html += '<small class="text-danger d-block">' + c.none + ' student(s) in this Level have no Fee Payment Option yet and are billed for every fee</small>';
+                        }
+                        return html;
+                    }
+                    %>
                     <table class="table table-bordered table-hover">
                         <thead class="table-dark">
                             <tr>
                                 <th>Level</th>
                                 <th>Category</th>
+                                <th>For</th>
                                 <th>Payment Mode</th>
                                 <th>Installment</th>
                                 <th>Academic Year</th>
@@ -187,7 +229,7 @@
                         </thead>
                         <tbody>
                             <% if (singles.length === 0 && groups.length === 0) { %>
-                                <tr><td colspan="7" class="text-center">No Fee Structure Found</td></tr>
+                                <tr><td colspan="8" class="text-center">No Fee Structure Found</td></tr>
                             <% } %>
 
                             <% singles.forEach(function(item){ %>
@@ -202,6 +244,7 @@
                                         <% } %>
                                     </td>
                                     <td><%= item.fee_name %></td>
+                                    <td><%- forCell("item", item.applies_to, item.level_id, { id: item.id }) %></td>
                                     <td><span class="badge bg-info text-dark">Single Payment</span></td>
                                     <td>-</td>
                                     <td><%= item.academic_year %></td>
@@ -228,6 +271,7 @@
                                         <% } %>
                                     </td>
                                     <td><%= g.fee_name %></td>
+                                    <td><%- forCell("group", g.applies_to, g.installments[0].level_id, { fee_category_id: g.installments[0].fee_category_id, level_id: g.installments[0].level_id || "", class_id: g.installments[0].class_id || "", academic_year: g.academic_year, payment_mode: g.payment_mode }) %></td>
                                     <td><span class="badge bg-info text-dark"><%= modeLabels[g.payment_mode] || g.payment_mode %></span></td>
                                     <td>
                                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleGroup(<%= gIndex %>)">
@@ -247,7 +291,7 @@
                                     </td>
                                 </tr>
                                 <tr id="group-detail-<%= gIndex %>" style="display:none;">
-                                    <td colspan="<%= simpleFeeMode ? 6 : 7 %>" class="bg-light">
+                                    <td colspan="<%= simpleFeeMode ? 7 : 8 %>" class="bg-light">
                                         <table class="table table-sm table-bordered mb-0">
                                             <thead>
                                                 <tr><th>Period</th><% if (!simpleFeeMode) { %><th>Amount</th><% } %><th>Action</th></tr>
@@ -294,16 +338,17 @@
 
                     <table class="table table-bordered table-hover">
                         <thead class="table-dark">
-                            <tr><th>Level</th><th>Category</th><th>Payment Mode</th><th>Academic Year</th><th>Duration</th><% if (!simpleFeeMode) { %><th>Amount/Period</th><% } %><th>Action</th></tr>
+                            <tr><th>Level</th><th>Category</th><th>For</th><th>Payment Mode</th><th>Academic Year</th><th>Duration</th><% if (!simpleFeeMode) { %><th>Amount/Period</th><% } %><th>Action</th></tr>
                         </thead>
                         <tbody>
                             <% if (feePlans.length === 0) { %>
-                                <tr><td colspan="7" class="text-center">No Fee Plans set up yet.</td></tr>
+                                <tr><td colspan="8" class="text-center">No Fee Plans set up yet.</td></tr>
                             <% } %>
                             <% feePlans.forEach(function(p) { %>
                                 <tr>
                                     <td><%= p.level_name || "-" %></td>
                                     <td><%= p.fee_name %></td>
+                                    <td><%- forCell("plan", p.applies_to, p.level_id, { id: p.id }) %></td>
                                     <td><span class="badge bg-info text-dark"><%= modeLabels[p.payment_mode] || p.payment_mode %></span></td>
                                     <td><%= p.academic_year %></td>
                                     <td><%= p.duration_months || 12 %> months</td>

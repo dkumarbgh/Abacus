@@ -17,8 +17,13 @@
                     <li>Fill in one row per payment, save it, then upload it below.</li>
                     <li>
                         <strong>Fee Category</strong> and <strong>Academic Year</strong> must already exist as a
-                        Fee Structure item for that student's Class (set up under Fees first) - a mismatch will
-                        cause that row to be skipped.
+                        fee for that student - their own installments or their Level's fees (set up under Fee
+                        Structure first). A row that doesn't match is skipped and listed below.
+                    </li>
+                    <li>
+                        The <strong>Fee Category</strong> column says which fee a payment is for - it does <em>not</em>
+                        change whether a student is on Annual or Monthly fees. That is set per student (Edit Student &gt;
+                        Fee Payment Option). A payment for an "Annual only" fee is refused for a Monthly student, and vice versa.
                     </li>
                     <li>
                         Unlike Student import, this always adds new payment records rather than updating
@@ -57,7 +62,7 @@
 
                 <form action="/fee-payments/import" method="POST" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <label class="form-label">Filled-in file (.xlsx)</label>
+                        <label class="form-label">Filled-in file (.xlsx or .csv)</label>
                         <input type="file" name="file" accept=".xlsx,.csv" class="form-control" required>
                     </div>
                     <button class="btn btn-success">Upload &amp; Import</button>

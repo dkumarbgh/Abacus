@@ -6,9 +6,36 @@ const { requireCapability } = require("../services/capabilities");
 const { getSimpleFeeMode } = require("../services/schoolSettings");
 const { logChange } = require("../services/auditLog");
 const { assignPlanToLevel } = require("../services/feePlanGenerator");
+const { FEE_OPTIONS, normalizeFeeOption } = require("../services/feeOption");
+
+// "For" on a fee: "" = all students, otherwise "Annual" / "Monthly".
+function appliesToFromBody(v) {
+    const n = normalizeFeeOption(v);
+    return n || null;
+}
 
 router.use(requireLogin);
 router.use(requireCapability("fee_structure"));
+
+// How many students in each Level are on each Fee Payment Option - shown
+// next to "Annual only"/"Monthly only" fees, plus a warning when some
+// students in that Level have no option yet (they're billed for both).
+router.get("/", (req, res, next) => {
+    db.all(
+        `SELECT level_id, COALESCE(fee_option, '') AS opt, COUNT(*) AS n
+         FROM students WHERE school_id=? AND level_id IS NOT NULL GROUP BY level_id, opt`,
+        [req.schoolId],
+        (err, rows) => {
+            const counts = {};
+            (rows || []).forEach(r => {
+                counts[r.level_id] = counts[r.level_id] || { Annual: 0, Monthly: 0, none: 0 };
+                counts[r.level_id][r.opt || "none"] = (counts[r.level_id][r.opt || "none"] || 0) + r.n;
+            });
+            res.locals.optionCounts = counts;
+            next();
+        }
+    );
+});
 
 // View Fee Structure
 router.get("/", (req, res) => {
@@ -34,7 +61,8 @@ router.get("/", (req, res) => {
                        fs.academic_year,
                        fs.amount,
                        fs.installment_label,
-                       fs.payment_mode
+                       fs.payment_mode,
+                       fs.applies_to
                 FROM fee_structure fs
                 LEFT JOIN classes c
                   ON fs.class_id = c.id
@@ -72,6 +100,7 @@ router.get("/", (req, res) => {
                             fee_name: item.fee_name,
                             academic_year: item.academic_year,
                             payment_mode: item.payment_mode,
+                            applies_to: item.applies_to || null,
                             totalAmount: 0,
                             installments: []
                         };
@@ -99,6 +128,8 @@ router.get("/", (req, res) => {
                                 if (errPlans) return res.send(errPlans.message);
 
                                 res.render("fees/structure", {
+                                    feeOptions: FEE_OPTIONS,
+                                    optionCounts: res.locals.optionCounts || {},
                                     levels,
                                     categories,
                                     singles,
@@ -141,7 +172,8 @@ router.post("/add", (req, res, next) => {
             res.render("fees/confirmDuplicateFee", {
                 plans, feeName: plans[0].fee_name, levelName: plans[0].level_name || "This Level",
                 levelId: req.body.level_id, feeCategoryId: req.body.fee_category_id,
-                academicYear: req.body.academic_year, amount: req.body.amount
+                academicYear: req.body.academic_year, amount: req.body.amount,
+                appliesTo: appliesToFromBody(req.body.applies_to) || ""
             });
         }
     );
@@ -167,10 +199,10 @@ router.post("/add", (req, res, next) => {
     // class/level/fee item.
     db.run(`
         INSERT INTO fee_structure
-        (level_id, fee_category_id, academic_year, amount, payment_mode, school_id)
-        VALUES(?,?,?,?,?,?)
+        (level_id, fee_category_id, academic_year, amount, payment_mode, school_id, applies_to)
+        VALUES(?,?,?,?,?,?,?)
     `,
-    [level_id, fee_category_id, academic_year, amount, "single", req.schoolId],
+    [level_id, fee_category_id, academic_year, amount, "single", req.schoolId, appliesToFromBody(req.body.applies_to)],
     function(err){
 
         if(err){
@@ -183,7 +215,7 @@ router.post("/add", (req, res, next) => {
                 schoolId, branchId: null, req,
                 entityType: "Fee Structure", entityName: cat ? cat.fee_name : `Category #${fee_category_id}`,
                 action: "Created",
-                details: `${academic_year}, ₹${amount}, Single Payment`
+                details: `${academic_year}, ₹${amount}, Single Payment${appliesToFromBody(req.body.applies_to) ? `, for ${appliesToFromBody(req.body.applies_to)} students only` : ""}`
             });
             res.redirect("/fee-structure");
         });
@@ -237,9 +269,9 @@ router.post("/add-monthly", (req, res) => {
             return;
         }
         db.run(
-            `INSERT INTO fee_structure (level_id, fee_category_id, academic_year, amount, installment_label, payment_mode, school_id)
-             VALUES (?,?,?,?,?,?,?)`,
-            [level_id, fee_category_id, academic_year, rows[i].amount, rows[i].label, paymentMode, schoolId],
+            `INSERT INTO fee_structure (level_id, fee_category_id, academic_year, amount, installment_label, payment_mode, school_id, applies_to)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [level_id, fee_category_id, academic_year, rows[i].amount, rows[i].label, paymentMode, schoolId, appliesToFromBody(req.body.applies_to)],
             (err) => {
                 if (err) return res.send(err.message);
                 insertNext(i + 1);
@@ -250,9 +282,86 @@ router.post("/add-monthly", (req, res) => {
 
 });
 
+// Change who a fee is for ("All students" / "Annual only" / "Monthly only")
+// on an existing One Amount item, installment group, or Auto Fee Plan.
+// For a Fee Plan the students' periods are re-synced straight away: periods
+// are added for students who now match, and UNPAID periods are removed for
+// students who no longer match (paid or discounted ones are always kept).
+router.post("/set-for", async (req, res) => {
+
+    const schoolId = req.schoolId;
+    const appliesTo = appliesToFromBody(req.body.applies_to);
+    const label = appliesTo ? `${appliesTo} students only` : "All students";
+    const q = (sql, params) => new Promise((resolve, reject) =>
+        db.run(sql, params, function(err) { err ? reject(err) : resolve(this); }));
+    const get = (sql, params) => new Promise((resolve, reject) =>
+        db.get(sql, params, (err, row) => err ? reject(err) : resolve(row)));
+
+    try {
+        if (req.body.kind === "plan") {
+            const plan = await get("SELECT * FROM fee_plans WHERE id=? AND school_id=?", [req.body.id, schoolId]);
+            if (!plan) return res.send("Fee Plan not found");
+            await q("UPDATE fee_plans SET applies_to=? WHERE id=? AND school_id=?", [appliesTo, plan.id, schoolId]);
+            plan.applies_to = appliesTo;
+            const { totalPeriods, totalRemoved } = await assignPlanToLevel(plan, schoolId);
+            const cat = await get("SELECT fee_name FROM fee_categories WHERE id=?", [plan.fee_category_id]);
+            logChange({
+                schoolId, branchId: null, req,
+                entityType: "Fee Plan", entityName: cat ? cat.fee_name : `Plan #${plan.id}`,
+                action: "Updated",
+                details: `Now for: ${label} - ${totalPeriods} period(s) added, ${totalRemoved} unpaid period(s) removed`
+            });
+        } else if (req.body.kind === "group") {
+            const { fee_category_id, level_id, class_id, academic_year, payment_mode } = req.body;
+            let sql = "UPDATE fee_structure SET applies_to=? WHERE school_id=? AND student_id IS NULL AND fee_category_id=? AND academic_year=? AND payment_mode=?";
+            const params = [appliesTo, schoolId, fee_category_id, academic_year, payment_mode];
+            sql += level_id ? " AND level_id=?" : " AND level_id IS NULL"; if (level_id) params.push(level_id);
+            sql += class_id ? " AND class_id=?" : " AND class_id IS NULL"; if (class_id) params.push(class_id);
+            await q(sql, params);
+            const cat = await get("SELECT fee_name FROM fee_categories WHERE id=?", [fee_category_id]);
+            logChange({ schoolId, branchId: null, req, entityType: "Fee Structure",
+                entityName: cat ? cat.fee_name : `Category #${fee_category_id}`, action: "Updated",
+                details: `${payment_mode} installments, ${academic_year} - now for: ${label}` });
+        } else {
+            const item = await get(
+                `SELECT fs.id, fs.academic_year, fc.fee_name FROM fee_structure fs JOIN fee_categories fc ON fc.id = fs.fee_category_id
+                 WHERE fs.id=? AND fs.school_id=? AND fs.student_id IS NULL`, [req.body.id, schoolId]);
+            if (!item) return res.send("Fee item not found");
+            await q("UPDATE fee_structure SET applies_to=? WHERE id=? AND school_id=?", [appliesTo, item.id, schoolId]);
+            logChange({ schoolId, branchId: null, req, entityType: "Fee Structure", entityName: item.fee_name,
+                action: "Updated", details: `${item.academic_year} - now for: ${label}` });
+        }
+        res.redirect("/fee-structure");
+    } catch (e) {
+        res.send(e.message);
+    }
+});
+
+// Fee items that already have a payment or discount can't be deleted - the
+// payments would be left pointing at nothing and drop out of every report.
+function idsWithMoney(ids, cb) {
+    if (!ids.length) return cb(null, 0);
+    const ph = ids.map(() => "?").join(",");
+    db.get(
+        `SELECT (SELECT COUNT(*) FROM fee_payments WHERE fee_structure_id IN (${ph}))
+              + (SELECT COUNT(*) FROM fee_discounts WHERE fee_structure_id IN (${ph})) AS n`,
+        [...ids, ...ids],
+        (err, row) => cb(err, row ? row.n : 0)
+    );
+}
+const MONEY_BLOCK_MSG = "This fee can't be deleted because payments or discounts are already recorded against it. " +
+    "If it should no longer apply to some students, change who it is <strong>For</strong> instead. " +
+    "<a href='/fee-structure'>Back to Fee Structure</a>";
+
 // Delete
 
-router.get("/delete/:id",(req,res)=>{
+router.get("/delete/:id",(req,res,next)=>{
+    idsWithMoney([req.params.id], (err, n) => {
+        if (err) return res.send(err.message);
+        if (n > 0) return res.status(400).send(MONEY_BLOCK_MSG);
+        next();
+    });
+}, (req,res)=>{
 
     const schoolId = req.schoolId;
 
@@ -311,6 +420,10 @@ router.get("/delete-plan", (req, res) => {
         const ids = rows.map(r => r.id);
         if (ids.length === 0) return res.redirect("/fee-structure");
 
+        idsWithMoney(ids, (errM, withMoney) => {
+        if (errM) return res.send(errM.message);
+        if (withMoney > 0) return res.status(400).send(MONEY_BLOCK_MSG);
+
         db.get("SELECT fee_name FROM fee_categories WHERE id=?", [fee_category_id], (errC, cat) => {
 
             db.run(`DELETE FROM fee_structure WHERE id IN (${ids.map(() => "?").join(",")})`, ids, (err2) => {
@@ -328,6 +441,8 @@ router.get("/delete-plan", (req, res) => {
                 res.redirect("/fee-structure");
 
             });
+
+        });
 
         });
 
@@ -355,14 +470,14 @@ router.post("/plans/add", async (req, res) => {
 
         const result = await new Promise((resolve, reject) => {
             db.run(
-                `INSERT INTO fee_plans (school_id, level_id, fee_category_id, academic_year, payment_mode, amount_per_period, duration_months)
-                 VALUES (?,?,?,?,?,?,?)`,
-                [schoolId, level_id, fee_category_id, academic_year, payment_mode, parseFloat(amount_per_period), durationMonths],
+                `INSERT INTO fee_plans (school_id, level_id, fee_category_id, academic_year, payment_mode, amount_per_period, duration_months, applies_to)
+                 VALUES (?,?,?,?,?,?,?,?)`,
+                [schoolId, level_id, fee_category_id, academic_year, payment_mode, parseFloat(amount_per_period), durationMonths, appliesToFromBody(req.body.applies_to)],
                 function(err) { err ? reject(err) : resolve(this); }
             );
         });
 
-        const plan = { id: result.lastID, level_id, fee_category_id, academic_year, payment_mode, amount_per_period: parseFloat(amount_per_period), duration_months: durationMonths };
+        const plan = { id: result.lastID, level_id, fee_category_id, academic_year, payment_mode, amount_per_period: parseFloat(amount_per_period), duration_months: durationMonths, applies_to: appliesToFromBody(req.body.applies_to) };
         const { assignedStudents, totalPeriods, skippedNoJoinDate } = await assignPlanToLevel(plan, schoolId);
 
         const cat = await new Promise((resolve) => db.get("SELECT fee_name FROM fee_categories WHERE id=?", [fee_category_id], (e, r) => resolve(r)));

@@ -23,6 +23,7 @@
                 <input type="hidden" name="fee_category_id" value="<%= feeCategoryId %>">
                 <input type="hidden" name="academic_year" value="<%= academicYear %>">
                 <input type="hidden" name="amount" value="<%= amount %>">
+                <input type="hidden" name="applies_to" value="<%= typeof appliesTo !== 'undefined' ? appliesTo : '' %>">
                 <input type="hidden" name="confirm_duplicate" value="1">
                 <button class="btn btn-outline-danger">Save anyway (charge both)</button>
             </form>

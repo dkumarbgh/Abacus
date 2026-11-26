@@ -10,6 +10,7 @@ const { requireCapability } = require("../services/capabilities");
 const { logChange } = require("../services/auditLog");
 const { computeDiscountAmount, computeNetAmount } = require("../services/feeCalc");
 const { assignNextReceiptNo } = require("../services/schoolSettings");
+const { sqlFeeApplies } = require("../services/feeOption");
 
 const uploadSpreadsheet = multer({
     storage: multer.memoryStorage(),
@@ -163,8 +164,11 @@ router.get("/:studentId", (req, res) => {
              JOIN fee_categories fc ON fs.fee_category_id = fc.id
              WHERE fs.school_id = ?
                AND ((fs.student_id IS NULL AND fs.class_id = ?) OR (fs.student_id IS NULL AND fs.level_id = ?) OR fs.student_id = ?)
+               AND (${sqlFeeApplies("fs", "?")}
+                    OR EXISTS (SELECT 1 FROM fee_payments p WHERE p.fee_structure_id = fs.id AND p.student_id = ?)
+                    OR EXISTS (SELECT 1 FROM fee_discounts d WHERE d.fee_structure_id = fs.id AND d.student_id = ?))
              ORDER BY fs.academic_year DESC, fc.fee_name`,
-            [schoolId, student.class_id, student.level_id, studentId],
+            [schoolId, student.class_id, student.level_id, studentId, student.fee_option || "", student.fee_option || "", studentId, studentId],
             (err, structures) => {
 
                 if (err) return res.send(err.message);
@@ -256,7 +260,8 @@ router.post("/pay", async (req, res) => {
                 (fee_structure.student_id IS NULL AND fee_structure.class_id = students.class_id)
                 OR (fee_structure.student_id IS NULL AND fee_structure.level_id = students.level_id)
                 OR fee_structure.student_id = students.id
-           )`,
+           )
+           AND ${sqlFeeApplies("fee_structure", "students.fee_option")}`,
         [student_id, schoolId, fee_structure_id, schoolId],
         (checkErr, ok) => {
 
@@ -364,7 +369,8 @@ router.post("/mark-paid", async (req, res) => {
                 (fee_structure.student_id IS NULL AND fee_structure.class_id = students.class_id)
                 OR (fee_structure.student_id IS NULL AND fee_structure.level_id = students.level_id)
                 OR fee_structure.student_id = students.id
-           )`,
+           )
+           AND ${sqlFeeApplies("fee_structure", "students.fee_option")}`,
         [student_id, schoolId, fee_structure_id, schoolId],
         (checkErr, ok) => {
 
@@ -474,7 +480,8 @@ router.post("/discount", (req, res) => {
                 (fee_structure.student_id IS NULL AND fee_structure.class_id = students.class_id)
                 OR (fee_structure.student_id IS NULL AND fee_structure.level_id = students.level_id)
                 OR fee_structure.student_id = students.id
-           )`,
+           )
+           AND ${sqlFeeApplies("fee_structure", "students.fee_option")}`,
         [student_id, schoolId, fee_structure_id, schoolId],
         (checkErr, ok) => {
 
@@ -673,10 +680,10 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
 
         let student;
         if (admissionNo) {
-            student = await feeDbGet("SELECT id, name, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))", [schoolId, admissionNo]);
+            student = await feeDbGet("SELECT id, name, class_id, level_id, fee_option FROM students WHERE school_id=? AND LOWER(TRIM(admission_no))=LOWER(TRIM(?))", [schoolId, admissionNo]);
         }
         if (!student && studentName) {
-            const matches = await feeDbAll("SELECT id, name, class_id, level_id FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [schoolId, studentName]);
+            const matches = await feeDbAll("SELECT id, name, class_id, level_id, fee_option FROM students WHERE school_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [schoolId, studentName]);
             if (matches.length === 1) student = matches[0];
             else if (matches.length > 1) {
                 rowErrors.push(`Row ${rowNum} (${studentName}): more than one student has this name - add a Roll Number to this row to say which one.`);
@@ -689,8 +696,8 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
         // installments -> their Level's items -> their Class's items (older
         // setups) -> a school-wide item. "2026-27" and "2026-2027" both match.
         const years = academicYearVariants(academicYear);
-        const candidates = await feeDbAll(
-            `SELECT fs.id, fs.amount, fs.installment_label, fs.due_date, fs.fee_category_id,
+        let candidates = await feeDbAll(
+            `SELECT fs.id, fs.amount, fs.installment_label, fs.due_date, fs.fee_category_id, fs.applies_to,
                     CASE WHEN fs.student_id IS NOT NULL THEN 0 WHEN fs.level_id IS NOT NULL THEN 1
                          WHEN fs.class_id IS NOT NULL THEN 2 ELSE 3 END AS tier
              FROM fee_structure fs
@@ -704,6 +711,14 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), requireSchoolFeature(
              ORDER BY tier, COALESCE(fs.due_date, ''), fs.id`,
             [schoolId, feeName, ...years, student.id, student.level_id, student.class_id]
         );
+        // Fee Payment Option: a fee meant only for Annual students can't take a
+        // Monthly student's payment (and vice versa).
+        const allCandidates = candidates;
+        candidates = candidates.filter(c => !c.applies_to || !student.fee_option || c.applies_to === student.fee_option);
+        if (!candidates.length && allCandidates.length) {
+            rowErrors.push(`Row ${rowNum} (${who}): "${feeName}" is set up for ${allCandidates[0].applies_to} students only, and this student's Fee Payment Option is ${student.fee_option}.`);
+            continue;
+        }
         if (!candidates.length) {
             rowErrors.push(`Row ${rowNum} (${who}): no fee item found for "${feeName}" / ${academicYear} for this student, their Level or their Class.`);
             continue;

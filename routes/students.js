@@ -64,6 +64,7 @@ function getFeePlansForDropdown(schoolId) {
 const { getFieldSettings, FIELD_DEFS, getAdmissionNoSettings, assignNextAdmissionNo } = require("../services/schoolSettings");
 const ExcelJS = require("exceljs");
 const { STUDENT_COLUMNS } = require("../services/studentColumns");
+const { FEE_OPTIONS, normalizeFeeOption } = require("../services/feeOption");
 
 router.use(requireLogin);
 router.use(requireCapability("students"));
@@ -88,6 +89,24 @@ const uploadSpreadsheet = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
+
+/**
+ * True when the student's Level has any fee set up for only Annual or only
+ * Monthly students - then every student in that Level needs a Fee Payment
+ * Option, otherwise they'd be billed for both.
+ */
+function levelNeedsFeeOption(schoolId, levelId) {
+    if (!levelId) return Promise.resolve(false);
+    return new Promise((resolve) => {
+        db.get(
+            `SELECT (SELECT COUNT(*) FROM fee_structure WHERE school_id=? AND level_id=? AND student_id IS NULL AND COALESCE(applies_to,'')<>'')
+                  + (SELECT COUNT(*) FROM fee_plans WHERE school_id=? AND level_id=? AND COALESCE(applies_to,'')<>'') AS n`,
+            [schoolId, levelId, schoolId, levelId],
+            (err, row) => resolve(!err && row && row.n > 0)
+        );
+    });
+}
+const FEE_OPTION_MISSING = "Fee Payment Option (this Level has fees for Annual-only or Monthly-only students)";
 
 /**
  * Checks req.body against the school's current mandatory-field settings
@@ -138,7 +157,7 @@ function getLookupLists(schoolId) {
 // UPDATE statements below don't have to spell out 25+ columns by hand.
 const EXTENDED_FIELDS = [
     "admission_no", "gender", "dob", "guardian_name", "guardian_phone", "guardian_phone_2", "guardian_email", "address", "fee_due_date",
-    "date_of_joining", "fee_plan_id",
+    "date_of_joining", "fee_plan_id", "fee_option",
     "mother_tongue", "mother_name", "father_name", "mother_occupation", "father_occupation",
     "mother_phone", "father_phone", "mother_email", "father_email",
     "previous_school", "stream", "standard", "religion", "nationality", "country", "state", "city",
@@ -455,6 +474,14 @@ router.post("/import", requireRole("Admin", "SuperAdmin"), uploadSpreadsheet.sin
                 }
                 rowData.date_of_joining = doj;
             }
+            if (colIndexByKey.fee_option) {
+                const opt = normalizeFeeOption(rowData.fee_option);
+                if (opt === undefined) {
+                    rowErrors.push(`Row ${rowNum} (${name}): Fee Payment Option "${rowData.fee_option}" isn't recognised - use ${FEE_OPTIONS.join(" or ")}, or leave it blank.`);
+                    continue;
+                }
+                rowData.fee_option = opt;
+            }
             rowData.age = age; // age isn't in EXTENDED_FIELDS (handled specially, like name/class_id) but IS a configurable mandatory field, so the validation loop below needs to see it too - DOB (if present in the sheet) always wins over a typed Age column
 
             // Class must already exist.
@@ -604,14 +631,16 @@ router.get("/add", (req, res) => {
 ===================================================== */
 router.post("/add", upload.single("photo"), (req, res) => {
 
+    req.body.fee_option = normalizeFeeOption(req.body.fee_option) || "";
     const { name, class_id, age } = req.body;
     const photo_path = req.file ? `/uploads/students/${req.file.filename}` : null;
     const schoolId = req.schoolId;
 
     Promise.all([
         getFieldSettings(schoolId, "student"),
-        getAdmissionNoSettings(schoolId)
-    ]).then(([fieldSettings, admissionNo]) => {
+        getAdmissionNoSettings(schoolId),
+        levelNeedsFeeOption(schoolId, req.body.level_id)
+    ]).then(([fieldSettings, admissionNo, needsFeeOption]) => {
 
         // Auto-assigned admission numbers are never "missing" - they don't
         // exist yet at validation time, they get created right before
@@ -623,6 +652,7 @@ router.post("/add", upload.single("photo"), (req, res) => {
         const missing = validateStudentFields(effectiveFieldSettings, req.body);
         if (!name || !String(name).trim()) missing.unshift("Full Name");
         if (!class_id) missing.unshift("Class");
+        if (needsFeeOption && !req.body.fee_option) missing.push(FEE_OPTION_MISSING);
 
         if (missing.length) {
             return Promise.all([
@@ -799,14 +829,19 @@ router.get("/edit/:id", (req, res) => {
 ===================================================== */
 router.post("/edit/:id", upload.single("photo"), (req, res) => {
 
+    req.body.fee_option = normalizeFeeOption(req.body.fee_option) || "";
     const { name, class_id, age } = req.body;
     const schoolId = req.schoolId;
 
-    getFieldSettings(schoolId, "student").then(fieldSettings => {
+    Promise.all([
+        getFieldSettings(schoolId, "student"),
+        levelNeedsFeeOption(schoolId, req.body.level_id)
+    ]).then(([fieldSettings, needsFeeOption]) => {
 
         const missing = validateStudentFields(fieldSettings, req.body);
         if (!name || !String(name).trim()) missing.unshift("Full Name");
         if (!class_id) missing.unshift("Class");
+        if (needsFeeOption && !req.body.fee_option) missing.push(FEE_OPTION_MISSING);
 
         if (missing.length) {
             return Promise.all([

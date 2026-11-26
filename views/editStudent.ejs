@@ -161,6 +161,15 @@
                             </select>
                         </div>
                         <div class="col-md-3 mb-3">
+                            <label class="form-label">Fee Payment Option</label>
+                            <select name="fee_option" class="form-select">
+                                <option value="">Not set (all Level fees apply)</option>
+                                <option value="Annual" <%= (student.fee_option || "") === "Annual" ? "selected" : "" %>>Annual</option>
+                                <option value="Monthly" <%= (student.fee_option || "") === "Monthly" ? "selected" : "" %>>Monthly</option>
+                            </select>
+                            <small class="text-muted">Decides which of the Level's fees apply: fees marked "Annual only" or "Monthly only" on the Fee Structure page.</small>
+                        </div>
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">
                                 Branch / Centre
                                 <% if (fieldSettings.branch_id) { %><span class="text-danger">*</span><% } %>

@@ -85,7 +85,7 @@
             </td>
             <td><%= student.name %></td>
             <td><%= student.admission_no || "-" %></td>
-            <td><%= student.level_name || "Not Assigned" %></td>
+            <td><%= student.level_name || "Not Assigned" %><% if (student.fee_option) { %> <span class="badge bg-light text-dark border"><%= student.fee_option %></span><% } %></td>
             <td><%= student.guardian_phone || "-" %></td>
             <td>
                 <% if (student.face_enrolled) { %>

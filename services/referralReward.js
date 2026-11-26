@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { sqlFeeApplies } = require("./feeOption");
 
 /**
  * Applies a referral's reward as a real discount against the referring
@@ -49,7 +50,8 @@ function applyReferralReward(referralId, redeemedByUserId = null) {
                         (fs.student_id IS NULL AND fs.class_id IS NOT NULL AND fs.class_id = s.class_id)
                         OR (fs.student_id IS NULL AND fs.level_id IS NOT NULL AND fs.level_id = s.level_id)
                         OR fs.student_id = s.id
-                   )`,
+                   )
+                   AND ${sqlFeeApplies("fs", "s.fee_option")}`,
                 [referral.referring_student_id, referral.school_id],
                 (err2, items) => {
 

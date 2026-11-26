@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { feeAppliesToStudent } = require("./feeOption");
 
 /**
  * Fee Plans generate a STUDENT'S OWN fee periods starting from their
@@ -136,11 +137,17 @@ function assignPlanToStudent(studentId, plan, schoolId) {
 
 async function assignPlanToStudentUnlocked(studentId, plan, schoolId) {
 
-    const student = await dbGet("SELECT date_of_joining, level_id FROM students WHERE id=? AND school_id=?", [studentId, schoolId]);
+    const student = await dbGet("SELECT date_of_joining, level_id, fee_option FROM students WHERE id=? AND school_id=?", [studentId, schoolId]);
     if (!student || !student.date_of_joining) return { inserted: 0, removed: 0 };
     if (String(student.level_id) !== String(plan.level_id)) return { inserted: 0, removed: 0 };
 
     let wanted = computePeriods(plan, student.date_of_joining);
+
+    // Fee Payment Option: a plan for "Annual" students only generates nothing
+    // for a "Monthly" student (and vice versa). Their existing UNPAID periods
+    // from it are removed below; paid/discounted ones are always kept.
+    const planFor = plan.applies_to || null;
+    if (!feeAppliesToStudent({ applies_to: planFor }, student)) wanted = [];
 
     // Promoted INTO this plan's Level? Then this plan only applies from the
     // promotion date - months before that were billed under the old Level.
@@ -219,6 +226,9 @@ async function assignPlanToStudentUnlocked(studentId, plan, schoolId) {
             await dbRun("UPDATE fee_structure SET due_date=? WHERE id=?", [want, row.id]);
         }
     }
+    // Keep each period's copy of the plan's Fee Payment Option in step.
+    await dbRun("UPDATE fee_structure SET applies_to=? WHERE student_id=? AND fee_plan_id=? AND COALESCE(applies_to,'') <> COALESCE(?,'')",
+        [planFor, studentId, plan.id, planFor]);
 
     // Add whatever the current schedule calls for that isn't there yet.
     const stillExistingLabels = new Set(existing.filter(r => wantedLabels.has(r.installment_label)).map(r => r.installment_label));
@@ -227,9 +237,9 @@ async function assignPlanToStudentUnlocked(studentId, plan, schoolId) {
         if (stillExistingLabels.has(period.label)) continue; // already there
         await dbRun(
             `INSERT INTO fee_structure
-             (student_id, fee_category_id, academic_year, amount, installment_label, payment_mode, fee_plan_id, school_id, due_date)
-             VALUES (?,?,?,?,?,?,?,?,?)`,
-            [studentId, plan.fee_category_id, plan.academic_year, period.amount, period.label, plan.payment_mode, plan.id, schoolId, period.dueDate]
+             (student_id, fee_category_id, academic_year, amount, installment_label, payment_mode, fee_plan_id, school_id, due_date, applies_to)
+             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            [studentId, plan.fee_category_id, plan.academic_year, period.amount, period.label, plan.payment_mode, plan.id, schoolId, period.dueDate, planFor]
         );
         inserted++;
     }
